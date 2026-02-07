@@ -82,7 +82,7 @@ const ProductsPage = () => {
             .filter((c: any) => c.status === 'APPROVED')
             .map((c: any) => ({
               id: c.company_id || c.id,
-              company_name: c.company_name,
+              name: c.company_name,
               status: c.status?.toLowerCase() || 'connected'
             }));
           setCompanies(connectedCompanies);

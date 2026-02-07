@@ -16,6 +16,11 @@ import { apiClient } from "@/utils/api";
 
 type UserRole = "MANUFACTURER" | "RETAILER";
 
+interface RoleSelectionResponse {
+  access?: string;
+  refresh?: string;
+}
+
 interface ContextResponse {
   role?: string;
   company_id?: string;
@@ -53,7 +58,7 @@ const RoleSelectionPage = () => {
 
     try {
       // Call API to select role
-      const roleResponse = await apiClient.post("/users/select-role/", { role });
+      const roleResponse = await apiClient.post<RoleSelectionResponse>("/users/select-role/", { role });
 
       if (roleResponse.error) {
         setError(roleResponse.error);

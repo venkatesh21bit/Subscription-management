@@ -20,6 +20,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signupSchema, type SignupFormData } from "@/lib/schemas/auth";
 
+interface RegistrationResponse {
+  access?: string;
+  refresh?: string;
+}
+
 const SignUpPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -116,7 +121,7 @@ const SignUpPage = () => {
           phone: "+" + countryCode + data.phone,
           full_name: data.full_name,
         }),
-      }, false);
+      }, false) as { error?: string; data?: RegistrationResponse };
 
       if (!response.error && response.data) {
         setMessage("Registration successful! Redirecting...");
