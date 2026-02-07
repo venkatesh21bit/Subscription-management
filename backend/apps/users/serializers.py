@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from apps.users.models import PhoneOTP
 from rest_framework_simplejwt.tokens import RefreshToken
 from core.auth.models import UserRole
+import re
 
 User = get_user_model()
 
@@ -14,8 +15,13 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     """
     Serializer for user registration.
     Creates a new user with email, phone, and full name.
+    Password requirements:
+    - Length > 8 characters
+    - Contains uppercase letter
+    - Contains lowercase letter
+    - Contains special character
     """
-    password = serializers.CharField(write_only=True, min_length=8)
+    password = serializers.CharField(write_only=True, min_length=9)
     phone = serializers.CharField(required=True)
     email = serializers.EmailField(required=True)
     full_name = serializers.CharField(required=True)
@@ -23,6 +29,24 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['email', 'phone', 'full_name', 'password']
+    
+    def validate_password(self, value):
+        """
+        Validate password strength requirements.
+        """
+        if len(value) <= 8:
+            raise serializers.ValidationError("Password must be more than 8 characters")
+        
+        if not re.search(r'[A-Z]', value):
+            raise serializers.ValidationError("Password must contain at least one uppercase letter")
+        
+        if not re.search(r'[a-z]', value):
+            raise serializers.ValidationError("Password must contain at least one lowercase letter")
+        
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', value):
+            raise serializers.ValidationError("Password must contain at least one special character")
+        
+        return value
     
     def validate(self, data):
         if User.objects.filter(email=data['email']).exists():
