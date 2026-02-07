@@ -3,12 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { RetailerNavbar } from '../../../components/retailer/nav_bar';
 import { apiClient } from '../../../utils/api';
-import { 
-  Building2, 
-  Plus, 
-  CheckCircle, 
-  Clock, 
-  X, 
+import {
+  Building2,
+  Plus,
+  CheckCircle,
+  Clock,
+  X,
   Link as LinkIcon,
   Search,
   Loader,
@@ -29,6 +29,7 @@ interface Company {
   status: 'approved' | 'connected' | 'pending' | 'rejected' | 'suspended';
   connected_at?: string;
   credit_limit?: string;
+  payment_terms?: string;
 }
 
 interface CompanyDisplay {
@@ -55,16 +56,16 @@ const CompaniesPage = () => {
   const [profileChecked, setProfileChecked] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
+
   // Join by code
   const [inviteCode, setInviteCode] = useState('');
   const [joiningByCode, setJoiningByCode] = useState(false);
-  
+
   // Request approval
   const [requestingApproval, setRequestingApproval] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [requestMessage, setRequestMessage] = useState('');
-  
+
   const [searchQuery, setSearchQuery] = useState('');
 
   // Check if retailer profile exists using context API
@@ -72,10 +73,10 @@ const CompaniesPage = () => {
     const checkProfile = async () => {
       try {
         const contextResponse = await apiClient.get<UserContext>('/users/me/context/');
-        
+
         if (contextResponse.data) {
           const context = contextResponse.data;
-          
+
           // If is_portal_user is false, profile not complete - redirect to setup
           if (!context.is_portal_user) {
             router.replace('/retailer/setup');
@@ -85,7 +86,7 @@ const CompaniesPage = () => {
           router.replace('/retailer/setup');
           return;
         }
-        
+
         setProfileChecked(true);
       } catch (error) {
         router.replace('/retailer/setup');
@@ -112,7 +113,9 @@ const CompaniesPage = () => {
           company_id: c.company_id,
           company_name: c.company_name,
           status: (c.status?.toLowerCase() || 'pending') as Company['status'],
-          connected_at: c.connected_at
+          connected_at: c.connected_at,
+          credit_limit: c.credit_limit || '0',
+          payment_terms: (c as any).payment_terms || 'Net 30 days'
         }));
         setCompanies(companiesList);
       } else {
@@ -131,8 +134,8 @@ const CompaniesPage = () => {
       // Use Portal companies discover API
       const response = await apiClient.get<PaginatedResponse<PublicCompany> | PublicCompany[]>('/portal/companies/discover/');
       if (response.data) {
-        const publicList = Array.isArray(response.data) 
-          ? response.data 
+        const publicList = Array.isArray(response.data)
+          ? response.data
           : (response.data as PaginatedResponse<PublicCompany>).results || [];
         // Map to expected format
         setPublicCompanies(publicList.map((c) => ({
@@ -152,17 +155,17 @@ const CompaniesPage = () => {
       setError('Please enter a company code');
       return;
     }
-    
+
     setJoiningByCode(true);
     setError('');
     setSuccess('');
-    
+
     try {
       // Use new join-by-company-code API
       const response = await apiClient.post<JoinCompanyResponse>('/portal/join-by-company-code/', {
         company_code: inviteCode.toUpperCase()
       });
-      
+
       if (response.data) {
         setSuccess(response.data.message || 'Successfully joined company!');
         setInviteCode('');
@@ -184,13 +187,13 @@ const CompaniesPage = () => {
     setRequestingApproval(true);
     setError('');
     setSuccess('');
-    
+
     try {
       // Use complete-profile API with company_id to request connection
       const response = await apiClient.post('/portal/complete-profile/', {
         company_id: companyId
       });
-      
+
       if (response.error) {
         setError(response.error || 'Failed to send request');
       } else {
@@ -225,7 +228,7 @@ const CompaniesPage = () => {
   const filteredPublicCompanies = publicCompanies.filter(company => {
     if (!searchQuery) return true;
     return company.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           (company.city?.toLowerCase().includes(searchQuery.toLowerCase()));
+      (company.city?.toLowerCase().includes(searchQuery.toLowerCase()));
   });
 
   // Check if already connected to a company
@@ -247,7 +250,7 @@ const CompaniesPage = () => {
   return (
     <div className="min-h-screen bg-neutral-950 text-white">
       <RetailerNavbar />
-      
+
       <div className="container mx-auto p-6">
         {/* Header */}
         <div className="mb-6">
@@ -265,7 +268,7 @@ const CompaniesPage = () => {
             </button>
           </div>
         )}
-        
+
         {success && (
           <div className="mb-6 p-4 bg-green-500/20 border border-green-500 rounded-lg flex items-center gap-3">
             <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
@@ -281,33 +284,30 @@ const CompaniesPage = () => {
           <div className="flex border-b border-neutral-800 overflow-x-auto">
             <button
               onClick={() => setActiveTab('connected')}
-              className={`flex items-center gap-2 px-6 py-4 font-medium whitespace-nowrap transition-colors ${
-                activeTab === 'connected'
-                  ? 'text-green-400 border-b-2 border-green-400'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
+              className={`flex items-center gap-2 px-6 py-4 font-medium whitespace-nowrap transition-colors ${activeTab === 'connected'
+                ? 'text-green-400 border-b-2 border-green-400'
+                : 'text-neutral-400 hover:text-white'
+                }`}
             >
               <Building2 className="h-5 w-5" />
               My Connections ({companies.filter(c => c.status === 'approved' || c.status === 'connected').length})
             </button>
             <button
               onClick={() => setActiveTab('join')}
-              className={`flex items-center gap-2 px-6 py-4 font-medium whitespace-nowrap transition-colors ${
-                activeTab === 'join'
-                  ? 'text-green-400 border-b-2 border-green-400'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
+              className={`flex items-center gap-2 px-6 py-4 font-medium whitespace-nowrap transition-colors ${activeTab === 'join'
+                ? 'text-green-400 border-b-2 border-green-400'
+                : 'text-neutral-400 hover:text-white'
+                }`}
             >
               <LinkIcon className="h-5 w-5" />
               Join by Code
             </button>
             <button
               onClick={() => setActiveTab('discover')}
-              className={`flex items-center gap-2 px-6 py-4 font-medium whitespace-nowrap transition-colors ${
-                activeTab === 'discover'
-                  ? 'text-green-400 border-b-2 border-green-400'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
+              className={`flex items-center gap-2 px-6 py-4 font-medium whitespace-nowrap transition-colors ${activeTab === 'discover'
+                ? 'text-green-400 border-b-2 border-green-400'
+                : 'text-neutral-400 hover:text-white'
+                }`}
             >
               <Search className="h-5 w-5" />
               Discover
@@ -347,7 +347,7 @@ const CompaniesPage = () => {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {companies.map(company => (
-                      <div 
+                      <div
                         key={company.id}
                         className="bg-neutral-800 rounded-lg p-4"
                       >
@@ -465,7 +465,7 @@ const CompaniesPage = () => {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {filteredPublicCompanies.map(company => (
-                      <div 
+                      <div
                         key={company.id}
                         className="bg-neutral-800 rounded-lg p-4"
                       >
@@ -490,7 +490,7 @@ const CompaniesPage = () => {
                             {company.description}
                           </p>
                         )}
-                        
+
                         {isConnected(company.id) ? (
                           <button
                             onClick={() => router.push('/retailer/Orders')}
