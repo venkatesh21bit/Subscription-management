@@ -131,6 +131,12 @@ const BrowseProductsPage = () => {
     fetchAllDiscounts();
   }, [cart]);
 
+  const getItemPrice = (item: CartItem) => {
+    const base = parseFloat(item.product.price);
+    const extra = item.selectedVariant ? parseFloat(item.selectedVariant.extra_price) : 0;
+    return base + extra;
+  };
+
   // Memoized cart totals
   const cartSubtotal = useMemo(() => {
     return cart.reduce((sum, item) => sum + (getItemPrice(item) * item.quantity), 0);
@@ -276,12 +282,6 @@ const BrowseProductsPage = () => {
 
   const getCartItemKey = (item: CartItem) => {
     return item.selectedVariant ? `${item.product.id}-${item.selectedVariant.id}` : item.product.id;
-  };
-
-  const getItemPrice = (item: CartItem) => {
-    const base = parseFloat(item.product.price);
-    const extra = item.selectedVariant ? parseFloat(item.selectedVariant.extra_price) : 0;
-    return base + extra;
   };
 
   const updateQuantity = (cartKey: string, delta: number) => {
