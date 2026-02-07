@@ -26,7 +26,8 @@ from apps.portal.api.views_retailer_portal import (
     RetailerProductListView,
     RetailerCategoryListView,
     RetailerPlaceOrderView,
-    RetailerOrderListView
+    RetailerOrderListView,
+    RetailerDiscountListView
 )
 from apps.company.api.views_connection import (
     JoinByCompanyCodeView,
@@ -64,4 +65,5 @@ urlpatterns = [
     path('categories/', RetailerCategoryListView.as_view(), name='retailer-categories'),
     path('orders/place/', RetailerPlaceOrderView.as_view(), name='retailer-place-order'),
     path('my-orders/', RetailerOrderListView.as_view(), name='retailer-my-orders'),
+    path('discounts/', RetailerDiscountListView.as_view(), name='retailer-discounts'),
 ]

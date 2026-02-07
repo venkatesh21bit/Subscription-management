@@ -16,6 +16,7 @@ from apps.products.models import Product, Category
 from apps.inventory.models import StockItem, StockBalance
 from apps.orders.models import SalesOrder, OrderItem
 from apps.orders.services.sales_order_service import SalesOrderService
+from apps.subscriptions.models import DiscountRule, DiscountApplication
 
 
 class RetailerProductListView(APIView):
@@ -426,7 +427,105 @@ class RetailerPlaceOrderView(APIView):
                     {"error": "No valid items were added to the order"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
+
+            # --- Discount application ---
+            discount_code = request.data.get('discount_code')
+            discount_amount = Decimal('0.00')
+            applied_discount = None
+
+            if discount_code:
+                today = timezone.now().date()
+                try:
+                    discount_rule = DiscountRule.objects.get(
+                        code=discount_code,
+                        company=company,
+                    )
+                except DiscountRule.DoesNotExist:
+                    order.delete()
+                    return Response(
+                        {"error": "Invalid discount code"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Validate date, active, total usage
+                if not discount_rule.is_valid_on(today):
+                    order.delete()
+                    return Response(
+                        {"error": "Discount is no longer valid or usage limit reached"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Per-customer usage
+                if not discount_rule.can_be_used_by(party):
+                    order.delete()
+                    return Response(
+                        {"error": "You have already used this discount the maximum number of times"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Min purchase
+                if discount_rule.min_purchase_amount > 0 and total_amount < discount_rule.min_purchase_amount:
+                    order.delete()
+                    return Response(
+                        {"error": f"Minimum purchase of ₹{discount_rule.min_purchase_amount} required for this discount"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Min quantity
+                total_qty = sum(item.quantity for item in order_items)
+                if discount_rule.min_quantity > 0 and total_qty < discount_rule.min_quantity:
+                    order.delete()
+                    return Response(
+                        {"error": f"Minimum quantity of {discount_rule.min_quantity} items required for this discount"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Product applicability
+                applicable_pids = set(discount_rule.applicable_products.values_list('id', flat=True))
+                if applicable_pids:
+                    ordered_pids = set()
+                    for oi in order_items:
+                        if oi.item and oi.item.product_id:
+                            ordered_pids.add(oi.item.product_id)
+                    if not ordered_pids.intersection(applicable_pids):
+                        order.delete()
+                        return Response(
+                            {"error": "Discount does not apply to any of the products in your cart"},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+
+                # Calculate discount
+                discount_amount = discount_rule.calculate_discount_amount(total_amount)
+                final_amount = total_amount - discount_amount
+
+                # Record usage
+                discount_rule.usage_count += 1
+                discount_rule.save(update_fields=['usage_count'])
+
+                DiscountApplication.objects.create(
+                    company=company,
+                    discount_rule=discount_rule,
+                    party=party,
+                    discount_amount=discount_amount,
+                    original_amount=total_amount,
+                    final_amount=final_amount,
+                    applied_by=user,
+                )
+
+                applied_discount = {
+                    "code": discount_rule.code,
+                    "name": discount_rule.name,
+                    "discount_type": discount_rule.discount_type,
+                    "discount_value": str(discount_rule.discount_value),
+                    "discount_amount": str(discount_amount),
+                }
+
+                # Store discount info in order notes
+                order.notes = (order.notes or '') + f" | Discount applied: {discount_rule.code} (-₹{discount_amount})"
+                order.save(update_fields=['notes'])
+
+            final_total = total_amount - discount_amount
+
             return Response({
                 "message": "Order placed successfully",
                 "order": {
@@ -435,10 +534,13 @@ class RetailerPlaceOrderView(APIView):
                     "company_name": company.name,
                     "company_id": str(company.id),
                     "total_items": len(order_items),
-                    "total_amount": str(total_amount),
+                    "subtotal": str(total_amount),
+                    "discount_amount": str(discount_amount),
+                    "total_amount": str(final_total),
                     "status": order.status,
                     "created_at": order.created_at.isoformat(),
-                    "notes": order.notes
+                    "notes": order.notes,
+                    "applied_discount": applied_discount,
                 }
             }, status=status.HTTP_201_CREATED)
             
@@ -447,6 +549,79 @@ class RetailerPlaceOrderView(APIView):
                 {"error": f"Failed to create order: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class RetailerDiscountListView(APIView):
+    """
+    List available discounts for a company.
+
+    GET /portal/discounts/?company_id=<uuid>
+
+    Returns active, currently-valid discount rules the retailer can use.
+    Each discount includes whether the retailer has remaining usage.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        company_id = request.query_params.get('company_id')
+        if not company_id:
+            return Response([], status=status.HTTP_200_OK)
+
+        # Verify retailer has access to this company
+        retailer = RetailerUser.objects.filter(
+            user=user, company_id=company_id
+        ).select_related('party', 'company').first()
+        if not retailer:
+            return Response([], status=status.HTTP_200_OK)
+
+        today = timezone.now().date()
+
+        discounts = DiscountRule.objects.filter(
+            company_id=company_id,
+            is_active=True,
+            start_date__lte=today,
+            end_date__gte=today,
+            applies_to_products=True,
+        )
+
+        party = retailer.party
+        data = []
+        for d in discounts:
+            # Check total usage limit
+            if d.max_total_usage > 0 and d.usage_count >= d.max_total_usage:
+                continue
+            # Check per-customer usage
+            customer_usage = 0
+            remaining_usage = None
+            if party and d.max_usage_per_customer > 0:
+                customer_usage = DiscountApplication.objects.filter(
+                    discount_rule=d, party=party
+                ).count()
+                if customer_usage >= d.max_usage_per_customer:
+                    continue
+                remaining_usage = d.max_usage_per_customer - customer_usage
+
+            applicable_product_ids = list(
+                d.applicable_products.values_list('id', flat=True)
+            )
+
+            data.append({
+                "id": str(d.id),
+                "name": d.name,
+                "code": d.code,
+                "description": d.description,
+                "discount_type": d.discount_type,
+                "discount_value": str(d.discount_value),
+                "min_purchase_amount": str(d.min_purchase_amount),
+                "min_quantity": d.min_quantity,
+                "start_date": d.start_date.isoformat(),
+                "end_date": d.end_date.isoformat(),
+                "remaining_usage": remaining_usage,
+                "applicable_product_ids": [str(pid) for pid in applicable_product_ids],
+            })
+
+        return Response(data)
 
 
 class RetailerOrderListView(APIView):

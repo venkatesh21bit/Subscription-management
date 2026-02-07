@@ -1,9 +1,9 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { RetailerNavbar } from '@/components/retailer/nav_bar';
 import { apiClient } from '@/utils/api';
 import { PaginatedResponse } from '@/types/api';
-import { ShoppingCart, Search, Filter, Package, Plus, Minus } from 'lucide-react';
+import { ShoppingCart, Search, Filter, Package, Plus, Minus, Tag, X, Check, AlertCircle } from 'lucide-react';
 
 interface ProductVariant {
   id: string;
@@ -49,6 +49,21 @@ interface CartItem {
   selectedVariant?: ProductVariant | null;
 }
 
+interface Discount {
+  id: string;
+  name: string;
+  code: string;
+  description: string;
+  discount_type: 'FIXED' | 'PERCENTAGE';
+  discount_value: string;
+  min_purchase_amount: string;
+  min_quantity: number;
+  start_date: string;
+  end_date: string;
+  remaining_usage: number | null;
+  applicable_product_ids: string[];
+}
+
 const BrowseProductsPage = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -75,6 +90,12 @@ const BrowseProductsPage = () => {
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
 
+  // Discounts
+  const [availableDiscounts, setAvailableDiscounts] = useState<Discount[]>([]);
+  const [appliedDiscount, setAppliedDiscount] = useState<Discount | null>(null);
+  const [discountError, setDiscountError] = useState('');
+  const [showDiscounts, setShowDiscounts] = useState(false);
+
   useEffect(() => {
     fetchCompanies();
   }, []);
@@ -85,6 +106,93 @@ const BrowseProductsPage = () => {
       fetchCategories();
     }
   }, [selectedCompany, selectedCategory, searchQuery, inStockOnly, companies]);
+
+  // Fetch discounts when cart changes (by company)
+  useEffect(() => {
+    if (cart.length === 0) {
+      setAvailableDiscounts([]);
+      setAppliedDiscount(null);
+      return;
+    }
+    // Get unique company IDs from cart
+    const companyIds = [...new Set(cart.map(item => item.product.company.id))];
+    const fetchAllDiscounts = async () => {
+      const allDiscounts: Discount[] = [];
+      for (const cid of companyIds) {
+        try {
+          const resp = await apiClient.get<Discount[]>(`/portal/discounts/?company_id=${cid}`);
+          if (resp.data && Array.isArray(resp.data)) {
+            allDiscounts.push(...resp.data);
+          }
+        } catch { /* ignore */ }
+      }
+      setAvailableDiscounts(allDiscounts);
+    };
+    fetchAllDiscounts();
+  }, [cart]);
+
+  // Memoized cart totals
+  const cartSubtotal = useMemo(() => {
+    return cart.reduce((sum, item) => sum + (getItemPrice(item) * item.quantity), 0);
+  }, [cart]);
+
+  const cartTotalQty = useMemo(() => {
+    return cart.reduce((sum, item) => sum + item.quantity, 0);
+  }, [cart]);
+
+  const discountAmount = useMemo(() => {
+    if (!appliedDiscount) return 0;
+    if (appliedDiscount.discount_type === 'FIXED') {
+      return Math.min(parseFloat(appliedDiscount.discount_value), cartSubtotal);
+    }
+    return cartSubtotal * (parseFloat(appliedDiscount.discount_value) / 100);
+  }, [appliedDiscount, cartSubtotal]);
+
+  const cartFinalTotal = useMemo(() => {
+    return Math.max(0, cartSubtotal - discountAmount);
+  }, [cartSubtotal, discountAmount]);
+
+  // Validate discount conditions against current cart
+  const validateDiscount = (discount: Discount): { valid: boolean; reason: string } => {
+    // Min purchase
+    if (parseFloat(discount.min_purchase_amount) > 0 && cartSubtotal < parseFloat(discount.min_purchase_amount)) {
+      return { valid: false, reason: `Min purchase ₹${parseFloat(discount.min_purchase_amount).toFixed(0)} required (current: ₹${cartSubtotal.toFixed(0)})` };
+    }
+    // Min quantity
+    if (discount.min_quantity > 0 && cartTotalQty < discount.min_quantity) {
+      return { valid: false, reason: `Min ${discount.min_quantity} items required (current: ${cartTotalQty})` };
+    }
+    // Product applicability
+    if (discount.applicable_product_ids.length > 0) {
+      const cartProductIds = cart.map(item => item.product.id);
+      const hasApplicable = cartProductIds.some(pid => discount.applicable_product_ids.includes(pid));
+      if (!hasApplicable) {
+        return { valid: false, reason: 'Does not apply to products in your cart' };
+      }
+    }
+    // Usage limit
+    if (discount.remaining_usage !== null && discount.remaining_usage <= 0) {
+      return { valid: false, reason: 'Usage limit reached' };
+    }
+    return { valid: true, reason: '' };
+  };
+
+  const applyDiscount = (discount: Discount) => {
+    const validation = validateDiscount(discount);
+    if (!validation.valid) {
+      setDiscountError(validation.reason);
+      setTimeout(() => setDiscountError(''), 3000);
+      return;
+    }
+    setAppliedDiscount(discount);
+    setDiscountError('');
+    setShowDiscounts(false);
+  };
+
+  const removeDiscount = () => {
+    setAppliedDiscount(null);
+    setDiscountError('');
+  };
 
   const fetchCompanies = async () => {
     try {
@@ -191,9 +299,7 @@ const BrowseProductsPage = () => {
   };
 
   const calculateTotal = () => {
-    return cart.reduce((sum, item) => 
-      sum + (getItemPrice(item) * item.quantity), 0
-    ).toFixed(2);
+    return cartFinalTotal.toFixed(2);
   };
 
   const placeOrder = async () => {
@@ -226,12 +332,19 @@ const BrowseProductsPage = () => {
     try {
       // Place order for each company
       for (const order of Object.values(ordersByCompany)) {
-        await apiClient.post('/portal/orders/place/', {
+        const payload: Record<string, unknown> = {
           company_id: order.company_id,
           items: order.items,
           delivery_address: deliveryAddress,
           notes: orderNotes
-        });
+        };
+        if (appliedDiscount) {
+          payload.discount_code = appliedDiscount.code;
+        }
+        const resp = await apiClient.post('/portal/orders/place/', payload);
+        if (resp.error) {
+          throw new Error(typeof resp.error === 'string' ? resp.error : 'Failed to place order');
+        }
       }
 
       setSuccess('Order(s) placed successfully!');
@@ -239,6 +352,7 @@ const BrowseProductsPage = () => {
       setShowCart(false);
       setDeliveryAddress('');
       setOrderNotes('');
+      setAppliedDiscount(null);
     } catch (error: any) {
       console.error('Failed to place order:', error);
       setError(error?.message || 'Failed to place order');
@@ -522,6 +636,130 @@ const BrowseProductsPage = () => {
                     })}
                   </div>
 
+                  {/* Discount Section */}
+                  <div className="mb-6">
+                    {appliedDiscount ? (
+                      <div className="bg-green-900/30 border border-green-700 rounded-lg p-3">
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-2">
+                            <Tag className="h-4 w-4 text-green-400" />
+                            <div>
+                              <p className="text-sm font-semibold text-green-400">{appliedDiscount.name}</p>
+                              <p className="text-xs text-green-300">
+                                Code: {appliedDiscount.code} &middot;{' '}
+                                {appliedDiscount.discount_type === 'PERCENTAGE'
+                                  ? `${appliedDiscount.discount_value}% off`
+                                  : `₹${parseFloat(appliedDiscount.discount_value).toFixed(2)} off`}
+                              </p>
+                            </div>
+                          </div>
+                          <button onClick={removeDiscount} className="text-neutral-400 hover:text-red-400">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <p className="text-sm text-green-400 mt-1 text-right">-₹{discountAmount.toFixed(2)}</p>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowDiscounts(!showDiscounts)}
+                        className="w-full flex items-center justify-between bg-neutral-800 border border-neutral-700 rounded-lg p-3 text-sm text-neutral-300 hover:border-blue-500 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Tag className="h-4 w-4" />
+                          <span>Apply Discount</span>
+                        </div>
+                        <span className="text-xs text-neutral-500">
+                          {availableDiscounts.length > 0 ? `${availableDiscounts.length} available` : 'No discounts'}
+                        </span>
+                      </button>
+                    )}
+
+                    {discountError && (
+                      <div className="mt-2 flex items-center gap-2 text-xs text-red-400 bg-red-900/20 rounded p-2">
+                        <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                        {discountError}
+                      </div>
+                    )}
+
+                    {/* Discount list dropdown */}
+                    {showDiscounts && !appliedDiscount && (
+                      <div className="mt-2 bg-neutral-800 border border-neutral-700 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+                        {availableDiscounts.length === 0 ? (
+                          <p className="p-3 text-sm text-neutral-500 text-center">No discounts available</p>
+                        ) : (
+                          availableDiscounts.map((discount) => {
+                            const validation = validateDiscount(discount);
+                            return (
+                              <div
+                                key={discount.id}
+                                className={`p-3 border-b border-neutral-700 last:border-b-0 ${
+                                  validation.valid ? 'hover:bg-neutral-700 cursor-pointer' : 'opacity-60'
+                                }`}
+                                onClick={() => validation.valid && applyDiscount(discount)}
+                              >
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium text-white">{discount.name}</p>
+                                    <p className="text-xs text-neutral-400 mt-0.5">
+                                      {discount.discount_type === 'PERCENTAGE'
+                                        ? `${discount.discount_value}% off`
+                                        : `₹${parseFloat(discount.discount_value).toFixed(2)} off`}
+                                    </p>
+                                    {discount.description && (
+                                      <p className="text-xs text-neutral-500 mt-0.5">{discount.description}</p>
+                                    )}
+                                  </div>
+                                  {validation.valid ? (
+                                    <Check className="h-4 w-4 text-green-400 mt-0.5 flex-shrink-0" />
+                                  ) : (
+                                    <AlertCircle className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
+                                  )}
+                                </div>
+                                {/* Conditions */}
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {parseFloat(discount.min_purchase_amount) > 0 && (
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                      cartSubtotal >= parseFloat(discount.min_purchase_amount)
+                                        ? 'bg-green-900/40 text-green-400'
+                                        : 'bg-red-900/40 text-red-400'
+                                    }`}>
+                                      Min ₹{parseFloat(discount.min_purchase_amount).toFixed(0)}
+                                    </span>
+                                  )}
+                                  {discount.min_quantity > 0 && (
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                      cartTotalQty >= discount.min_quantity
+                                        ? 'bg-green-900/40 text-green-400'
+                                        : 'bg-red-900/40 text-red-400'
+                                    }`}>
+                                      Min {discount.min_quantity} items
+                                    </span>
+                                  )}
+                                  {discount.remaining_usage !== null && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-700 text-neutral-400">
+                                      {discount.remaining_usage} uses left
+                                    </span>
+                                  )}
+                                  {discount.applicable_product_ids.length > 0 && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-700 text-neutral-400">
+                                      Specific products
+                                    </span>
+                                  )}
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-700 text-neutral-400">
+                                    Until {new Date(discount.end_date).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                {!validation.valid && (
+                                  <p className="text-[10px] text-yellow-500 mt-1">{validation.reason}</p>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Order Form */}
                   <div className="mb-6 space-y-4">
                     <div>
@@ -552,7 +790,19 @@ const BrowseProductsPage = () => {
 
                   {/* Total and Checkout */}
                   <div className="border-t border-neutral-800 pt-4">
-                    <div className="flex justify-between items-center mb-4">
+                    {/* Subtotal */}
+                    <div className="flex justify-between items-center text-sm text-neutral-400 mb-1">
+                      <span>Subtotal</span>
+                      <span>₹{cartSubtotal.toFixed(2)}</span>
+                    </div>
+                    {/* Discount line */}
+                    {appliedDiscount && discountAmount > 0 && (
+                      <div className="flex justify-between items-center text-sm text-green-400 mb-1">
+                        <span>Discount ({appliedDiscount.code})</span>
+                        <span>-₹{discountAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center mb-4 mt-2">
                       <span className="text-lg font-semibold text-white">Total:</span>
                       <span className="text-2xl font-bold text-white">₹{calculateTotal()}</span>
                     </div>
