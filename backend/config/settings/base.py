@@ -149,6 +149,11 @@ EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'venkatesh.k21062005@gmail.c
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'ywqc fghh kgdv kaqe')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
+# Twilio Configuration (for phone OTP)
+TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
+TWILIO_PHONE_NUMBER = os.environ.get('TWILIO_PHONE_NUMBER')
+
 # JWT Authentication Configuration
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
