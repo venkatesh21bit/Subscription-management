@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { apiClient } from '@/utils/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Eye, Edit2 } from 'lucide-react';
+import { Eye, Edit2, Trash2 } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -128,6 +128,22 @@ export default function ProductListPage() {
   const handleEditProduct = (e: React.MouseEvent, productId: string) => {
     e.stopPropagation();
     router.push(`/manufacturer/products/${productId}?mode=edit`);
+  };
+
+  const handleDeleteProduct = async (e: React.MouseEvent, productId: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this product?')) {
+      return;
+    }
+
+    try {
+      await apiClient.delete(`/catalog/products/${productId}/`);
+      // Refresh the list
+      fetchProducts();
+    } catch (error: any) {
+      console.error('Error deleting product:', error);
+      alert(error.response?.data?.error || 'Failed to delete product');
+    }
   };
 
   const handleNewProduct = () => {
@@ -263,6 +279,15 @@ export default function ProductListPage() {
                         className="text-yellow-400 hover:text-yellow-300 hover:bg-gray-600"
                       >
                         <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => handleDeleteProduct(e, product.id)}
+                        title="Delete Product"
+                        className="text-red-400 hover:text-red-300 hover:bg-gray-600"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </TableCell>
