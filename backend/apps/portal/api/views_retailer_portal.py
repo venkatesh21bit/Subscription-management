@@ -55,7 +55,7 @@ class RetailerProductListView(APIView):
         """List products from connected companies."""
         user = request.user
         
-        # Get retailer profiles (user may have multiple, one per company)
+        # Get retailer profiles
         retailers = RetailerUser.objects.filter(user=user)
         if not retailers.exists():
             return Response(
@@ -63,26 +63,29 @@ class RetailerProductListView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Get approved company connections across all retailer profiles
-        connections = RetailerCompanyAccess.objects.filter(
-            retailer__in=retailers,
-            status='APPROVED'
-        ).select_related('company').values_list('company_id', flat=True)
+        # Get company IDs from RetailerCompanyAccess (APPROVED)
+        company_ids_set = set(
+            RetailerCompanyAccess.objects.filter(
+                retailer__in=retailers,
+                status='APPROVED'
+            ).values_list('company_id', flat=True)
+        )
         
-        if not connections:
+        # Also include companies from RetailerUser records with APPROVED status
+        # (covers cases where RetailerCompanyAccess wasn't created)
+        company_ids_set.update(
+            retailers.filter(status='APPROVED').values_list('company_id', flat=True)
+        )
+        
+        if not company_ids_set:
             return Response([], status=status.HTTP_200_OK)
         
         # Filter by company if specified
         company_id = request.query_params.get('company_id')
         if company_id:
-            if company_id not in [str(c) for c in connections]:
-                return Response(
-                    {"error": "You are not connected to this company"},
-                    status=status.HTTP_403_FORBIDDEN
-                )
             company_ids = [company_id]
         else:
-            company_ids = connections
+            company_ids = list(company_ids_set)
         
         # Get products from connected companies
         products = Product.objects.filter(
@@ -173,18 +176,25 @@ class RetailerCategoryListView(APIView):
         """List categories from connected companies."""
         user = request.user
         
-        # Get retailer profiles (user may have multiple, one per company)
+        # Get retailer profiles
         retailers = RetailerUser.objects.filter(user=user)
         if not retailers.exists():
             return Response([], status=status.HTTP_200_OK)
         
-        # Get approved connections across all retailer profiles
-        connections = RetailerCompanyAccess.objects.filter(
-            retailer__in=retailers,
-            status='APPROVED'
-        ).values_list('company_id', flat=True)
+        # Get company IDs from RetailerCompanyAccess (APPROVED)
+        company_ids_set = set(
+            RetailerCompanyAccess.objects.filter(
+                retailer__in=retailers,
+                status='APPROVED'
+            ).values_list('company_id', flat=True)
+        )
         
-        if not connections:
+        # Also include companies from RetailerUser records with APPROVED status
+        company_ids_set.update(
+            retailers.filter(status='APPROVED').values_list('company_id', flat=True)
+        )
+        
+        if not company_ids_set:
             return Response([], status=status.HTTP_200_OK)
         
         # Filter by company if specified
@@ -192,7 +202,7 @@ class RetailerCategoryListView(APIView):
         if company_id:
             company_ids = [company_id]
         else:
-            company_ids = connections
+            company_ids = list(company_ids_set)
         
         # Get categories
         categories = Category.objects.filter(

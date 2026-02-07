@@ -475,10 +475,18 @@ class RetailerApproveView(APIView):
             retailer_user.approved_at = timezone.now()
             retailer_user.save(update_fields=['status', 'approved_by', 'approved_at', 'party'])
             
-            # Also update RetailerCompanyAccess if it exists
+            # Update or create RetailerCompanyAccess record
             from apps.portal.models import RetailerCompanyAccess
-            access = RetailerCompanyAccess.objects.filter(retailer=retailer_user, company=company).first()
-            if access:
+            access, created = RetailerCompanyAccess.objects.get_or_create(
+                retailer=retailer_user,
+                company=company,
+                defaults={
+                    'status': 'APPROVED',
+                    'approved_by': request.user,
+                    'approved_at': timezone.now(),
+                }
+            )
+            if not created:
                 access.status = 'APPROVED'
                 access.approved_by = request.user
                 access.approved_at = timezone.now()
