@@ -304,3 +304,96 @@ class RetailerCompanyListView(APIView):
         
         return Response(data)
 
+
+class UpdateConnectionView(APIView):
+    """
+    Update retailer connection status (suspend/reactivate).
+    
+    POST /company/update-connection/
+    
+    Request:
+    {
+        "connection_id": "uuid or id",
+        "status": "approved" | "suspended"
+    }
+    
+    Response:
+    {
+        "message": "Connection status updated",
+        "status": "APPROVED"
+    }
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        """Update connection status."""
+        user = request.user
+        connection_id = request.data.get('connection_id')
+        new_status = request.data.get('status', '').upper()
+        
+        if not connection_id:
+            return Response(
+                {"error": "connection_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if new_status not in ['APPROVED', 'SUSPENDED', 'BLOCKED']:
+            return Response(
+                {"error": "Invalid status. Must be 'approved', 'suspended', or 'blocked'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get user's company
+        company_user = CompanyUser.objects.filter(
+            user=user,
+            is_active=True
+        ).first()
+        
+        if not company_user:
+            return Response(
+                {"error": "No active company found for this user"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        company = company_user.company
+        
+        # Try to find the retailer user by ID
+        try:
+            retailer_user = RetailerUser.objects.get(id=connection_id, company=company)
+            
+            # Update status
+            retailer_user.status = new_status
+            if new_status == 'APPROVED':
+                retailer_user.approved_by = user
+                retailer_user.approved_at = timezone.now()
+            retailer_user.save()
+            
+            # Also update RetailerCompanyAccess if exists
+            access = RetailerCompanyAccess.objects.filter(
+                retailer=retailer_user,
+                company=company
+            ).first()
+            
+            if access:
+                access.status = new_status
+                if new_status == 'APPROVED':
+                    access.approved_by = user
+                    access.approved_at = timezone.now()
+                access.save()
+            
+            return Response({
+                "message": f"Connection status updated to {new_status}",
+                "status": new_status,
+                "connection_id": str(retailer_user.id)
+            })
+            
+        except RetailerUser.DoesNotExist:
+            return Response(
+                {"error": "Connection not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to update connection: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
