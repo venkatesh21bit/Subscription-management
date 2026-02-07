@@ -31,6 +31,10 @@ interface Product {
     name: string;
     sku: string;
     price: string;
+    cgst_rate?: string;
+    sgst_rate?: string;
+    igst_rate?: string;
+    tax_rate?: string;
 }
 
 interface ProductsResponse {
@@ -309,19 +313,42 @@ export default function CreateSubscriptionPage() {
         setOrderLines(orderLines.map(line => {
             if (line.id === id) {
                 const updated = { ...line, [field]: value }
-                // Recalculate amount
-                if (field === 'quantity' || field === 'unit_price' || field === 'discount' || field === 'taxes') {
-                    const subtotal = updated.quantity * updated.unit_price
-                    updated.amount = subtotal - updated.discount + updated.taxes
-                }
-                // Update product name when product is selected
+                // Update product name and auto-fill GST when product is selected
                 if (field === 'product_id') {
                     const product = products.find(p => p.id === value)
                     if (product) {
                         updated.product_name = product.name
                         updated.unit_price = parseFloat(product.price) || 0
-                        updated.amount = updated.quantity * updated.unit_price - updated.discount + updated.taxes
+                        // Auto-calculate GST: use cgst+sgst or igst (whichever is higher)
+                        const cgst = parseFloat(product.cgst_rate || '0')
+                        const sgst = parseFloat(product.sgst_rate || '0')
+                        const igst = parseFloat(product.igst_rate || '0')
+                        const gstTotal = Math.max(cgst + sgst, igst)
+                        const subtotal = updated.quantity * updated.unit_price
+                        const afterDiscount = subtotal - updated.discount
+                        updated.taxes = parseFloat((afterDiscount * gstTotal / 100).toFixed(2))
+                        updated.amount = afterDiscount + updated.taxes
                     }
+                }
+                // Recalculate amount on quantity/price/discount change
+                if (field === 'quantity' || field === 'unit_price' || field === 'discount') {
+                    const subtotal = updated.quantity * updated.unit_price
+                    const afterDiscount = subtotal - updated.discount
+                    // Re-derive GST from the selected product
+                    const product = products.find(p => p.id === updated.product_id)
+                    if (product) {
+                        const cgst = parseFloat(product.cgst_rate || '0')
+                        const sgst = parseFloat(product.sgst_rate || '0')
+                        const igst = parseFloat(product.igst_rate || '0')
+                        const gstTotal = Math.max(cgst + sgst, igst)
+                        updated.taxes = parseFloat((afterDiscount * gstTotal / 100).toFixed(2))
+                    }
+                    updated.amount = afterDiscount + updated.taxes
+                }
+                // If taxes manually edited, recalculate amount
+                if (field === 'taxes') {
+                    const subtotal = updated.quantity * updated.unit_price
+                    updated.amount = subtotal - updated.discount + updated.taxes
                 }
                 return updated
             }
@@ -333,17 +360,37 @@ export default function CreateSubscriptionPage() {
         setInvoiceOrderLines(invoiceOrderLines.map(line => {
             if (line.id === id) {
                 const updated = { ...line, [field]: value }
-                if (field === 'quantity' || field === 'unit_price' || field === 'discount' || field === 'taxes') {
-                    const subtotal = updated.quantity * updated.unit_price
-                    updated.amount = subtotal - updated.discount + updated.taxes
-                }
                 if (field === 'product_id') {
                     const product = products.find(p => p.id === value)
                     if (product) {
                         updated.product_name = product.name
                         updated.unit_price = parseFloat(product.price) || 0
-                        updated.amount = updated.quantity * updated.unit_price - updated.discount + updated.taxes
+                        const cgst = parseFloat(product.cgst_rate || '0')
+                        const sgst = parseFloat(product.sgst_rate || '0')
+                        const igst = parseFloat(product.igst_rate || '0')
+                        const gstTotal = Math.max(cgst + sgst, igst)
+                        const subtotal = updated.quantity * updated.unit_price
+                        const afterDiscount = subtotal - updated.discount
+                        updated.taxes = parseFloat((afterDiscount * gstTotal / 100).toFixed(2))
+                        updated.amount = afterDiscount + updated.taxes
                     }
+                }
+                if (field === 'quantity' || field === 'unit_price' || field === 'discount') {
+                    const subtotal = updated.quantity * updated.unit_price
+                    const afterDiscount = subtotal - updated.discount
+                    const product = products.find(p => p.id === updated.product_id)
+                    if (product) {
+                        const cgst = parseFloat(product.cgst_rate || '0')
+                        const sgst = parseFloat(product.sgst_rate || '0')
+                        const igst = parseFloat(product.igst_rate || '0')
+                        const gstTotal = Math.max(cgst + sgst, igst)
+                        updated.taxes = parseFloat((afterDiscount * gstTotal / 100).toFixed(2))
+                    }
+                    updated.amount = afterDiscount + updated.taxes
+                }
+                if (field === 'taxes') {
+                    const subtotal = updated.quantity * updated.unit_price
+                    updated.amount = subtotal - updated.discount + updated.taxes
                 }
                 return updated
             }
@@ -376,16 +423,28 @@ export default function CreateSubscriptionPage() {
             // Find product details from products state
             const productDetails = products.find(p => p.id === templateProduct.product)
             const unitPrice = productDetails ? parseFloat(productDetails.price || '0') : 0
+            const qty = parseInt(templateProduct.quantity) || 1
+            const subtotal = qty * unitPrice
+
+            // Auto-calculate GST from product
+            let taxes = 0
+            if (productDetails) {
+                const cgst = parseFloat(productDetails.cgst_rate || '0')
+                const sgst = parseFloat(productDetails.sgst_rate || '0')
+                const igst = parseFloat(productDetails.igst_rate || '0')
+                const gstTotal = Math.max(cgst + sgst, igst)
+                taxes = parseFloat((subtotal * gstTotal / 100).toFixed(2))
+            }
 
             return {
                 id: `line-${Date.now()}-${Math.random()}`,
                 product_id: templateProduct.product,
                 product_name: productDetails?.name || '',
-                quantity: parseInt(templateProduct.quantity) || 1,
+                quantity: qty,
                 unit_price: unitPrice,
                 discount: 0,
-                taxes: 0,
-                amount: (parseInt(templateProduct.quantity) || 1) * unitPrice
+                taxes: taxes,
+                amount: subtotal + taxes
             }
         })
 
@@ -816,7 +875,7 @@ export default function CreateSubscriptionPage() {
                                                                     />
                                                                 </TableCell>
                                                                 <TableCell className="text-right p-2 text-white font-medium">
-                                                                    ${line.amount.toFixed(2)}
+                                                                    ₹{line.amount.toFixed(2)}
                                                                 </TableCell>
                                                                 <TableCell className="p-2">
                                                                     <Button 
@@ -845,7 +904,7 @@ export default function CreateSubscriptionPage() {
                                                 Add Line
                                             </Button>
                                             <div className="text-sm font-medium text-white">
-                                                Total: <span className="text-white text-base">${calculateTotal(invoiceOrderLines)}</span>
+                                                Total: <span className="text-white text-base">₹{calculateTotal(invoiceOrderLines)}</span>
                                             </div>
                                         </div>
                                         </TabsContent>
@@ -1143,7 +1202,7 @@ export default function CreateSubscriptionPage() {
                                                                     />
                                                                 </TableCell>
                                                                 <TableCell className="text-right p-2 text-white font-medium">
-                                                                    ${line.amount.toFixed(2)}
+                                                                    ₹{line.amount.toFixed(2)}
                                                                 </TableCell>
                                                                 <TableCell className="p-2">
                                                                     <Button 
@@ -1172,7 +1231,7 @@ export default function CreateSubscriptionPage() {
                                                 Add Line
                                             </Button>
                                             <div className="text-sm font-medium text-white">
-                                                Total: <span className="text-white text-base">${calculateTotal(orderLines)}</span>
+                                                Total: <span className="text-white text-base">₹{calculateTotal(orderLines)}</span>
                                             </div>
                                         </div>
                                     </TabsContent>

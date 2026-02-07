@@ -1024,7 +1024,7 @@ class OrderCreateInvoiceView(APIView):
             return SalesOrder.objects.select_related(
                 'customer', 'currency'
             ).prefetch_related(
-                'items__product'
+                'items__item__product'
             ).get(id=order_id, company=request.company)
         except SalesOrder.DoesNotExist:
             return None
@@ -1105,32 +1105,19 @@ class OrderCreateInvoiceView(APIView):
             line_no = 1
 
             for order_item in order.items.all():
-                # Find or create a StockItem for the product
-                stock_item = StockItem.objects.filter(
-                    company=request.company,
-                    product=order_item.product
-                ).first()
-                if not stock_item:
-                    stock_item = StockItem.objects.create(
-                        company=request.company,
-                        product=order_item.product,
-                        sku=order_item.product.sku or f'PROD-{order_item.product.id}',
-                        name=order_item.product.name,
-                        uom=default_uom,
-                        is_stock_item=True,
-                        is_active=True
-                    )
+                # OrderItem has 'item' (StockItem FK), not 'product'
+                stock_item = order_item.item
+                product = stock_item.product if stock_item else None
 
-                # Calculate line amounts
-                line_subtotal = order_item.unit_price * order_item.quantity
-                discount_pct = order_item.discount_percentage or Decimal('0')
+                # Calculate line amounts using correct model fields
+                line_subtotal = order_item.unit_rate * order_item.quantity
+                discount_pct = order_item.discount_pct or Decimal('0')
                 line_discount = line_subtotal * (discount_pct / Decimal('100'))
                 line_total = line_subtotal - line_discount
 
                 # Auto-calculate GST from product rates if order item has no tax
                 effective_tax_rate = order_item.tax_rate or Decimal('0')
-                if effective_tax_rate == 0 and order_item.product:
-                    product = order_item.product
+                if effective_tax_rate == 0 and product:
                     gst = (getattr(product, 'cgst_rate', 0) or Decimal('0')) + \
                           (getattr(product, 'sgst_rate', 0) or Decimal('0'))
                     igst = getattr(product, 'igst_rate', 0) or Decimal('0')
@@ -1144,10 +1131,10 @@ class OrderCreateInvoiceView(APIView):
                     invoice=invoice,
                     line_no=line_no,
                     item=stock_item,
-                    description=order_item.description or order_item.product.name,
+                    description=order_item.description or (product.name if product else ''),
                     quantity=order_item.quantity,
-                    uom=stock_item.uom or default_uom,
-                    unit_rate=order_item.unit_price,
+                    uom=order_item.uom or default_uom,
+                    unit_rate=order_item.unit_rate,
                     discount_pct=discount_pct,
                     line_total=line_total,
                     tax_amount=line_tax,

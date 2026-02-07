@@ -46,6 +46,7 @@ interface Company {
 interface CartItem {
   product: Product;
   quantity: number;
+  selectedVariant?: ProductVariant | null;
 }
 
 const BrowseProductsPage = () => {
@@ -66,6 +67,9 @@ const BrowseProductsPage = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
   const [placingOrder, setPlacingOrder] = useState(false);
+  
+  // Variant selections per product
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, ProductVariant | null>>({});
   
   // Order form
   const [deliveryAddress, setDeliveryAddress] = useState('');
@@ -144,23 +148,37 @@ const BrowseProductsPage = () => {
   };
 
   const addToCart = (product: Product) => {
-    const existingItem = cart.find(item => item.product.id === product.id);
+    const variant = selectedVariants[product.id] || null;
+    const cartKey = variant ? `${product.id}-${variant.id}` : product.id;
+    const existingItem = cart.find(item => {
+      const itemKey = item.selectedVariant ? `${item.product.id}-${item.selectedVariant.id}` : item.product.id;
+      return itemKey === cartKey;
+    });
     if (existingItem) {
-      setCart(cart.map(item => 
-        item.product.id === product.id 
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
-      ));
+      setCart(cart.map(item => {
+        const itemKey = item.selectedVariant ? `${item.product.id}-${item.selectedVariant.id}` : item.product.id;
+        return itemKey === cartKey ? { ...item, quantity: item.quantity + 1 } : item;
+      }));
     } else {
-      setCart([...cart, { product, quantity: 1 }]);
+      setCart([...cart, { product, quantity: 1, selectedVariant: variant }]);
     }
-    setSuccess(`Added ${product.name} to cart`);
+    setSuccess(`Added ${product.name}${variant ? ` (${variant.attribute}: ${variant.values})` : ''} to cart`);
     setTimeout(() => setSuccess(''), 2000);
   };
 
-  const updateQuantity = (productId: string, delta: number) => {
+  const getCartItemKey = (item: CartItem) => {
+    return item.selectedVariant ? `${item.product.id}-${item.selectedVariant.id}` : item.product.id;
+  };
+
+  const getItemPrice = (item: CartItem) => {
+    const base = parseFloat(item.product.price);
+    const extra = item.selectedVariant ? parseFloat(item.selectedVariant.extra_price) : 0;
+    return base + extra;
+  };
+
+  const updateQuantity = (cartKey: string, delta: number) => {
     setCart(cart.map(item => {
-      if (item.product.id === productId) {
+      if (getCartItemKey(item) === cartKey) {
         const newQuantity = item.quantity + delta;
         return newQuantity > 0 ? { ...item, quantity: newQuantity } : item;
       }
@@ -168,13 +186,13 @@ const BrowseProductsPage = () => {
     }).filter(item => item.quantity > 0));
   };
 
-  const removeFromCart = (productId: string) => {
-    setCart(cart.filter(item => item.product.id !== productId));
+  const removeFromCart = (cartKey: string) => {
+    setCart(cart.filter(item => getCartItemKey(item) !== cartKey));
   };
 
   const calculateTotal = () => {
     return cart.reduce((sum, item) => 
-      sum + (parseFloat(item.product.price) * item.quantity), 0
+      sum + (getItemPrice(item) * item.quantity), 0
     ).toFixed(2);
   };
 
@@ -370,26 +388,41 @@ const BrowseProductsPage = () => {
                   <p className="text-sm text-neutral-400 mb-3 line-clamp-2">{product.description}</p>
                 )}
 
-                {/* Variants */}
+                {/* Variant Selector */}
                 {product.variants && product.variants.length > 0 && (
-                  <div className="mb-3 space-y-1">
-                    {product.variants.map((variant) => (
-                      <div key={variant.id} className="text-xs bg-neutral-800 rounded px-2 py-1">
-                        <span className="text-neutral-300 font-medium">{variant.attribute}:</span>{' '}
-                        <span className="text-neutral-400">{variant.values}</span>
-                        {parseFloat(variant.extra_price) > 0 && (
-                          <span className="text-green-400 ml-1">(+₹{parseFloat(variant.extra_price).toFixed(2)})</span>
-                        )}
-                      </div>
-                    ))}
+                  <div className="mb-3">
+                    <label className="text-xs text-neutral-400 mb-1 block">Select Variant</label>
+                    <select
+                      value={selectedVariants[product.id]?.id || ''}
+                      onChange={(e) => {
+                        const variant = product.variants.find(v => v.id === e.target.value) || null;
+                        setSelectedVariants(prev => ({ ...prev, [product.id]: variant }));
+                      }}
+                      className="w-full px-2 py-1.5 bg-neutral-800 border border-neutral-700 rounded text-sm text-white focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Base (no variant)</option>
+                      {product.variants.map((variant) => (
+                        <option key={variant.id} value={variant.id}>
+                          {variant.attribute}: {variant.values}
+                          {parseFloat(variant.extra_price) > 0 ? ` (+₹${parseFloat(variant.extra_price).toFixed(2)})` : ''}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
 
                 <div className="mb-3">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-2xl font-bold text-white">₹{product.price}</span>
+                    <span className="text-2xl font-bold text-white">
+                      ₹{(parseFloat(product.price) + (selectedVariants[product.id] ? parseFloat(selectedVariants[product.id]!.extra_price) : 0)).toFixed(2)}
+                    </span>
                     <span className="text-sm text-neutral-400">/{product.unit}</span>
                   </div>
+                  {selectedVariants[product.id] && parseFloat(selectedVariants[product.id]!.extra_price) > 0 && (
+                    <p className="text-xs text-neutral-500 mb-1">
+                      Base: ₹{parseFloat(product.price).toFixed(2)} + Variant: ₹{parseFloat(selectedVariants[product.id]!.extra_price).toFixed(2)}
+                    </p>
+                  )}
                   <div className="text-sm">
                     <span className={`${product.in_stock ? 'text-green-400' : 'text-red-400'}`}>
                       {product.in_stock ? `${product.available_quantity} available` : 'Out of stock'}
@@ -440,15 +473,24 @@ const BrowseProductsPage = () => {
                 <>
                   {/* Cart Items */}
                   <div className="space-y-4 mb-6">
-                    {cart.map((item) => (
-                      <div key={item.product.id} className="bg-neutral-800 rounded-lg p-4">
+                    {cart.map((item) => {
+                      const key = getCartItemKey(item);
+                      const itemPrice = getItemPrice(item);
+                      return (
+                      <div key={key} className="bg-neutral-800 rounded-lg p-4">
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex-1">
                             <h3 className="font-semibold text-white">{item.product.name}</h3>
                             <p className="text-sm text-neutral-400">{item.product.company.name}</p>
+                            {item.selectedVariant && (
+                              <p className="text-xs text-blue-400 mt-1">
+                                {item.selectedVariant.attribute}: {item.selectedVariant.values}
+                                {parseFloat(item.selectedVariant.extra_price) > 0 && ` (+₹${parseFloat(item.selectedVariant.extra_price).toFixed(2)})`}
+                              </p>
+                            )}
                           </div>
                           <button
-                            onClick={() => removeFromCart(item.product.id)}
+                            onClick={() => removeFromCart(key)}
                             className="text-red-400 hover:text-red-300"
                           >
                             ✕
@@ -458,25 +500,26 @@ const BrowseProductsPage = () => {
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => updateQuantity(item.product.id, -1)}
+                              onClick={() => updateQuantity(key, -1)}
                               className="bg-neutral-700 text-white p-1 rounded hover:bg-neutral-600"
                             >
                               <Minus className="h-4 w-4" />
                             </button>
                             <span className="text-white w-8 text-center">{item.quantity}</span>
                             <button
-                              onClick={() => updateQuantity(item.product.id, 1)}
+                              onClick={() => updateQuantity(key, 1)}
                               className="bg-neutral-700 text-white p-1 rounded hover:bg-neutral-600"
                             >
                               <Plus className="h-4 w-4" />
                             </button>
                           </div>
                           <span className="text-white font-semibold">
-                            ₹{(parseFloat(item.product.price) * item.quantity).toFixed(2)}
+                            ₹{(itemPrice * item.quantity).toFixed(2)}
                           </span>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* Order Form */}

@@ -251,8 +251,8 @@ export default function ProductListPage() {
                   className="border-b border-gray-700 hover:bg-gray-700 cursor-pointer transition-colors"
                 >
                   <TableCell className="font-medium">{product.name}</TableCell>
-                  <TableCell>${parseFloat(product.price || '0').toFixed(2)}</TableCell>
-                  <TableCell>${parseFloat(product.cost || '0').toFixed(2)}</TableCell>
+                  <TableCell>₹{parseFloat(product.price || '0').toFixed(2)}</TableCell>
+                  <TableCell>₹{parseFloat(product.cost || '0').toFixed(2)}</TableCell>
                   <TableCell>{product.product_type || 'N/A'}</TableCell>
                   <TableCell>{product.available_quantity || '0'}</TableCell>
                   <TableCell>{product.unit || 'N/A'}</TableCell>
