@@ -450,8 +450,9 @@ class QuotationDetailSerializer(serializers.ModelSerializer):
     Detailed serializer for Quotation.
     """
     id = serializers.UUIDField(read_only=True)
-    party_name = serializers.CharField(source='party.name', read_only=True)
-    plan_name = serializers.CharField(source='plan.name', read_only=True)
+    party = serializers.SerializerMethodField()
+    plan = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
     template_name = serializers.CharField(source='template.name', read_only=True, allow_null=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     items = QuotationItemSerializer(many=True, read_only=True)
@@ -462,9 +463,7 @@ class QuotationDetailSerializer(serializers.ModelSerializer):
             'id',
             'quotation_number',
             'party',
-            'party_name',
             'plan',
-            'plan_name',
             'template',
             'template_name',
             'status',
@@ -487,14 +486,40 @@ class QuotationDetailSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id',
             'quotation_number',
-            'party_name',
-            'plan_name',
-            'template_name',
             'status_display',
             'items',
             'created_at',
             'updated_at'
         ]
+
+    def get_party(self, obj):
+        if obj.party:
+            return {
+                'id': str(obj.party.id),
+                'name': obj.party.name,
+                'email': obj.party.email or '',
+            }
+        return None
+
+    def get_plan(self, obj):
+        if obj.plan:
+            return {
+                'id': str(obj.plan.id),
+                'name': obj.plan.name,
+                'description': obj.plan.description or '',
+                'billing_interval': obj.plan.billing_interval,
+                'billing_interval_count': obj.plan.billing_interval_count,
+            }
+        return None
+
+    def get_currency(self, obj):
+        if obj.currency:
+            return {
+                'id': str(obj.currency.id),
+                'code': obj.currency.code,
+                'symbol': obj.currency.symbol,
+            }
+        return None
 
 
 # ============================================================================

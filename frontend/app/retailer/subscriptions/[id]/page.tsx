@@ -19,14 +19,14 @@ interface QuotationDetail {
     id: string;
     name: string;
     email: string;
-  };
+  } | null;
   plan: {
     id: string;
     name: string;
     description: string;
     billing_interval: string;
     billing_interval_count: number;
-  };
+  } | null;
   status: string;
   valid_until: string;
   start_date: string;
@@ -34,7 +34,7 @@ interface QuotationDetail {
   currency: {
     code: string;
     symbol: string;
-  };
+  } | null;
   sent_at: string | null;
   accepted_at: string | null;
   rejected_at: string | null;
@@ -180,9 +180,8 @@ export default function RetailerSubscriptionDetailPage() {
 
   const formatCurrency = (amount: number) => {
     if (!quotation) return '';
-    const symbol = quotation.currency?.symbol || '$';
-    const code = quotation.currency?.code || 'USD';
-    return `${symbol}${amount.toFixed(2)} ${code}`;
+    const symbol = quotation.currency?.symbol || '₹';
+    return `${symbol}${amount.toFixed(2)}`;
   };
 
   const isExpired = () => {
@@ -344,9 +343,9 @@ export default function RetailerSubscriptionDetailPage() {
               <CardContent className="space-y-4">
                 <div>
                   <p className="text-sm text-gray-600">Plan Name</p>
-                  <p className="text-xl font-bold">{quotation.plan.name}</p>
+                  <p className="text-xl font-bold">{quotation.plan?.name || 'N/A'}</p>
                 </div>
-                {quotation.plan.description && (
+                {quotation.plan?.description && (
                   <div>
                     <p className="text-sm text-gray-600">Description</p>
                     <p className="text-gray-800">{quotation.plan.description}</p>
@@ -356,7 +355,7 @@ export default function RetailerSubscriptionDetailPage() {
                   <div>
                     <p className="text-sm text-gray-600">Billing Frequency</p>
                     <p className="font-semibold">
-                      Every {quotation.plan.billing_interval_count} {quotation.plan.billing_interval.toLowerCase()}
+                      Every {quotation.plan?.billing_interval_count || 1} {(quotation.plan?.billing_interval || 'month').toLowerCase()}
                     </p>
                   </div>
                   <div>

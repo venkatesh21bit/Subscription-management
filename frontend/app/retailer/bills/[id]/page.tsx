@@ -328,28 +328,43 @@ export default function RetailerBillDetailPage() {
     if (!bill) return;
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
-    const sym = bill.currency_symbol || '$';
-    const code = bill.currency_code || 'USD';
-    const fmtAmt = (n: number) => `${sym}${n.toFixed(2)} ${code}`;
+    const sym = bill.currency_symbol || '₹';
+    const fmtAmt = (n: number | string | undefined | null) => {
+      const val = typeof n === 'string' ? parseFloat(n) : (n ?? 0);
+      return `${sym}${(isNaN(val) ? 0 : val).toFixed(2)}`;
+    };
     const fmtDt = (d: string | undefined | null) => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
-    const linesHtml = (bill.lines || []).map(l => `
-      <tr>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${l.product?.name || l.item_name || 'Service'}${l.description ? '<br/><small style="color:#6b7280">' + l.description + '</small>' : ''}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">${l.quantity}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">${fmtAmt(l.unit_price ?? l.unit_rate ?? 0)}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600">${fmtAmt(l.total ?? l.line_total ?? 0)}</td>
-      </tr>
-    `).join('');
-    const paymentsHtml = (bill.payments || []).map(p => `
-      <tr>
+
+    let linesHtml = '';
+    try {
+      linesHtml = (bill.lines || []).map(l => {
+        const name = l.product?.name || l.item_name || 'Service';
+        const desc = l.description ? `<br/><small style="color:#6b7280">${String(l.description).replace(/</g, '&lt;')}</small>` : '';
+        return `<tr>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb">${String(name).replace(/</g, '&lt;')}${desc}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">${l.quantity}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">${fmtAmt(l.unit_price ?? l.unit_rate)}</td>
+          <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600">${fmtAmt(l.total ?? l.line_total)}</td>
+        </tr>`;
+      }).join('');
+    } catch (e) { console.error('Error building lines HTML:', e); }
+
+    let paymentsHtml = '';
+    try {
+      paymentsHtml = (bill.payments || []).map(p => `<tr>
         <td style="padding:6px;border-bottom:1px solid #e5e7eb;font-size:13px">${fmtDt(p.payment_date)}</td>
-        <td style="padding:6px;border-bottom:1px solid #e5e7eb;font-size:13px">${p.payment_method}</td>
+        <td style="padding:6px;border-bottom:1px solid #e5e7eb;font-size:13px">${paymentMethodLabels[p.payment_method] || p.payment_method}</td>
         <td style="padding:6px;border-bottom:1px solid #e5e7eb;font-size:13px">${p.reference_number || '\u2014'}</td>
         <td style="padding:6px;border-bottom:1px solid #e5e7eb;text-align:right;font-size:13px;color:#059669;font-weight:600">${fmtAmt(p.amount)}</td>
-      </tr>
-    `).join('');
-    printWindow.document.write(`
-      <!DOCTYPE html>
+      </tr>`).join('');
+    } catch (e) { console.error('Error building payments HTML:', e); }
+
+    const notesEscaped = bill.notes ? String(bill.notes).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+    const termsEscaped = bill.terms_and_conditions ? String(bill.terms_and_conditions).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+
+    const statusBadge = bill.status === 'PAID' ? 'bg-green' : 'bg-blue';
+
+    const htmlContent = `<!DOCTYPE html>
       <html><head><title>Invoice ${bill.invoice_number}</title>
       <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 40px; color: #1f2937; }
@@ -383,7 +398,7 @@ export default function RetailerBillDetailPage() {
             <div style="font-size:20px;font-weight:600;margin-top:4px">${bill.invoice_number}</div>
           </div>
           <div style="text-align:right">
-            <span class="badge bg-blue">${bill.status.replace('_', ' ')}</span>
+            <span class="badge ${statusBadge}">${bill.status.replace('_', ' ')}</span>
           </div>
         </div>
         <div class="grid section">
@@ -413,22 +428,29 @@ export default function RetailerBillDetailPage() {
         </div>
         <div style="display:flex;justify-content:flex-end">
           <div style="width:300px" class="totals">
-            ${bill.subtotal > 0 ? '<div class="total-row"><span>Subtotal</span><span>' + fmtAmt(bill.subtotal) + '</span></div>' : ''}
+            <div class="total-row"><span>Subtotal</span><span>${fmtAmt(bill.subtotal)}</span></div>
             ${bill.discount_amount > 0 ? '<div class="total-row paid"><span>Discount</span><span>-' + fmtAmt(bill.discount_amount) + '</span></div>' : ''}
             ${bill.tax_amount > 0 ? '<div class="total-row"><span>Tax</span><span>' + fmtAmt(bill.tax_amount) + '</span></div>' : ''}
             <div class="total-row total-grand"><span>Total</span><span>${fmtAmt(bill.total_amount)}</span></div>
-            ${bill.paid_amount > 0 ? '<div class="total-row paid"><span>Paid</span><span>' + fmtAmt(bill.paid_amount) + '</span></div>' : ''}
-            ${bill.outstanding_amount > 0 ? '<div class="total-row outstanding" style="font-weight:700"><span>Outstanding</span><span>' + fmtAmt(bill.outstanding_amount) + '</span></div>' : ''}
+            ${bill.paid_amount > 0 ? '<div class="total-row paid"><span>Amount Paid</span><span>' + fmtAmt(bill.paid_amount) + '</span></div>' : ''}
+            ${bill.outstanding_amount > 0 ? '<div class="total-row outstanding" style="font-weight:700"><span>Balance Due</span><span>' + fmtAmt(bill.outstanding_amount) + '</span></div>' : '<div class="total-row paid" style="font-weight:700"><span>Balance Due</span><span>' + fmtAmt(0) + '</span></div>'}
           </div>
         </div>
         ${paymentsHtml ? '<div class="section" style="margin-top:24px"><div class="section-title">Payment History</div><table><thead><tr><th>Date</th><th>Method</th><th>Reference</th><th class="text-right">Amount</th></tr></thead><tbody>' + paymentsHtml + '</tbody></table></div>' : ''}
-        ${bill.notes ? '<div class="section" style="margin-top:24px"><div class="section-title">Notes</div><p style="font-size:14px;color:#4b5563">' + bill.notes + '</p></div>' : ''}
-        ${bill.terms_and_conditions ? '<div class="section"><div class="section-title">Terms & Conditions</div><p style="font-size:14px;color:#4b5563">' + bill.terms_and_conditions + '</p></div>' : ''}
+        ${notesEscaped ? '<div class="section" style="margin-top:24px"><div class="section-title">Notes</div><p style="font-size:14px;color:#4b5563">' + notesEscaped + '</p></div>' : ''}
+        ${termsEscaped ? '<div class="section"><div class="section-title">Terms & Conditions</div><p style="font-size:14px;color:#4b5563">' + termsEscaped + '</p></div>' : ''}
         <div class="footer">Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-      </div></body></html>
-    `);
-    printWindow.document.close();
-    setTimeout(() => { printWindow.print(); }, 500);
+      </div></body></html>`;
+
+    try {
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      setTimeout(() => { printWindow.print(); }, 500);
+    } catch (e) {
+      console.error('Error writing print document:', e);
+      printWindow.document.write('<html><body><h1>Error generating invoice</h1><p>Please try again.</p></body></html>');
+      printWindow.document.close();
+    }
   };
 
   if (loading) {
