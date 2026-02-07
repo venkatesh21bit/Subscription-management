@@ -162,34 +162,48 @@ const ConnectionsPage = () => {
   const fetchConnections = async () => {
     setConnectionsLoading(true);
     try {
-      // Use portal/retailers endpoint with status filter for approved connections
-      const response = await fetchWithAuth(`${API_URL}/portal/retailers/?status=APPROVED`);
-      if (response.ok) {
-        const data = await response.json();
+      // Fetch both APPROVED and SUSPENDED connections for manufacturer to manage
+      const [approvedRes, suspendedRes] = await Promise.all([
+        fetchWithAuth(`${API_URL}/portal/retailers/?status=APPROVED`),
+        fetchWithAuth(`${API_URL}/portal/retailers/?status=SUSPENDED`)
+      ]);
+
+      const allConnections: any[] = [];
+
+      if (approvedRes.ok) {
+        const data = await approvedRes.json();
         const retailers = Array.isArray(data) ? data : data.results || [];
-        // Map backend data to frontend format
-        setConnections(retailers.map((r: any) => ({
-          id: r.id,
-          company: {
-            id: r.party_id || '',
-            name: r.business_name || r.party_name || '',
-            address: r.address || '',
-          },
-          retailer: {
-            id: r.user?.id || r.user_id || r.id,
-            username: r.user?.email || r.user_email || r.email || '',
-            email: r.user?.email || r.user_email || r.email || '',
-            first_name: r.user?.full_name?.split(' ')[0] || r.user_name?.split(' ')[0] || '',
-            last_name: r.user?.full_name?.split(' ').slice(1).join(' ') || r.user_name?.split(' ').slice(1).join(' ') || '',
-          },
-          status: (r.status || 'APPROVED').toLowerCase(),
-          connected_at: r.created_at || new Date().toISOString(),
-          approved_by: null,
-          approved_at: r.updated_at || r.created_at || new Date().toISOString(),
-          credit_limit: r.credit_limit || 0,
-          payment_terms: r.payment_terms || 'Net 30 days',
-        })));
+        allConnections.push(...retailers);
       }
+
+      if (suspendedRes.ok) {
+        const data = await suspendedRes.json();
+        const retailers = Array.isArray(data) ? data : data.results || [];
+        allConnections.push(...retailers);
+      }
+
+      // Map backend data to frontend format
+      setConnections(allConnections.map((r: any) => ({
+        id: r.id,
+        company: {
+          id: r.party_id || '',
+          name: r.business_name || r.party_name || '',
+          address: r.address || '',
+        },
+        retailer: {
+          id: r.user?.id || r.user_id || r.id,
+          username: r.user?.email || r.user_email || r.email || '',
+          email: r.user?.email || r.user_email || r.email || '',
+          first_name: r.user?.full_name?.split(' ')[0] || r.user_name?.split(' ')[0] || '',
+          last_name: r.user?.full_name?.split(' ').slice(1).join(' ') || r.user_name?.split(' ').slice(1).join(' ') || '',
+        },
+        status: (r.status || 'APPROVED').toLowerCase(),
+        connected_at: r.created_at || new Date().toISOString(),
+        approved_by: null,
+        approved_at: r.updated_at || r.created_at || new Date().toISOString(),
+        credit_limit: r.credit_limit || 0,
+        payment_terms: r.payment_terms || 'Net 30 days',
+      })));
     } catch (error) {
       console.error('Failed to fetch connections:', error);
     } finally {
