@@ -96,6 +96,12 @@ const SignUpPage = () => {
     }
   };
 
+  interface SignUpResponse {
+    access?: string;
+    refresh?: string;
+    [key: string]: any;
+  }
+
   const onSubmit = async (data: SignupFormData) => {
     // Check phone verification
     if (!phoneVerified) {
@@ -108,7 +114,7 @@ const SignUpPage = () => {
     setIsSubmitting(true);
 
     try {
-      const response = await api("/users/register/", {
+      const response = await api<SignUpResponse>("/users/register/", {
         method: "POST",
         body: JSON.stringify({
           email: data.email,
@@ -120,7 +126,7 @@ const SignUpPage = () => {
 
       if (!response.error && response.data) {
         setMessage("Registration successful! Redirecting...");
-        
+
         // Store authentication tokens
         if (response.data.access) {
           localStorage.setItem("access_token", response.data.access);
@@ -128,11 +134,11 @@ const SignUpPage = () => {
         if (response.data.refresh) {
           localStorage.setItem("refresh_token", response.data.refresh);
         }
-        
+
         // Store the user info temporarily for the next step
         localStorage.setItem("temp_user_email", data.email);
         localStorage.setItem("temp_user_phone", data.phone);
-        
+
         // Redirect to role selection after a brief delay
         setTimeout(() => {
           router.replace("/authentication/setup/role");
@@ -319,8 +325,8 @@ const SignUpPage = () => {
               {isSubmitting
                 ? "Creating Account..."
                 : !phoneVerified
-                ? "Verify Phone to Continue"
-                : "Create Account"}
+                  ? "Verify Phone to Continue"
+                  : "Create Account"}
             </Button>
           </form>
 

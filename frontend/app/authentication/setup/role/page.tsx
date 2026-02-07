@@ -40,6 +40,12 @@ const roleOptions = [
   },
 ];
 
+interface RoleSelectionResponse {
+  access?: string;
+  refresh?: string;
+  detail?: string;
+}
+
 const RoleSelectionPage = () => {
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -53,7 +59,7 @@ const RoleSelectionPage = () => {
 
     try {
       // Call API to select role
-      const roleResponse = await apiClient.post("/users/select-role/", { role });
+      const roleResponse = await apiClient.post<RoleSelectionResponse>("/users/select-role/", { role });
 
       if (roleResponse.error) {
         setError(roleResponse.error);

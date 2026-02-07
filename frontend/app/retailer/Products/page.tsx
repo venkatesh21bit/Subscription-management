@@ -33,7 +33,7 @@ const ProductsPage = () => {
   const [selectedCompany, setSelectedCompany] = useState('');
   const [sortBy, setSortBy] = useState('name');
   const [loading, setLoading] = useState(true);
-  const [cart, setCart] = useState<{[key: number]: number}>({});
+  const [cart, setCart] = useState<{ [key: number]: number }>({});
   const [profileChecked, setProfileChecked] = useState(false);
 
   const categories = ['Electronics', 'Clothing', 'Food', 'Books', 'Home', 'Sports'];
@@ -43,10 +43,10 @@ const ProductsPage = () => {
     const checkProfile = async () => {
       try {
         const contextResponse = await fetchWithAuth(`${API_URL}/users/me/context/`);
-        
+
         if (contextResponse.ok) {
           const context = await contextResponse.json();
-          
+
           // If is_portal_user is false, profile not complete - redirect to setup
           if (!context.is_portal_user) {
             router.replace('/retailer/setup');
@@ -56,7 +56,7 @@ const ProductsPage = () => {
           router.replace('/retailer/setup');
           return;
         }
-        
+
         setProfileChecked(true);
       } catch (error) {
         router.replace('/retailer/setup');
@@ -82,7 +82,7 @@ const ProductsPage = () => {
             .filter((c: any) => c.status === 'APPROVED')
             .map((c: any) => ({
               id: c.company_id || c.id,
-              company_name: c.company_name,
+              name: c.company_name || c.name || 'Unknown Company',
               status: c.status?.toLowerCase() || 'connected'
             }));
           setCompanies(connectedCompanies);
@@ -130,14 +130,14 @@ const ProductsPage = () => {
   };
 
   const filteredProducts = products.filter(product => {
-    const matchesSearch = search === '' || 
+    const matchesSearch = search === '' ||
       product.name.toLowerCase().includes(search.toLowerCase()) ||
       product.category.toLowerCase().includes(search.toLowerCase()) ||
       (product.company_name && product.company_name.toLowerCase().includes(search.toLowerCase()));
-    
+
     const matchesCategory = selectedCategory === '' || product.category === selectedCategory;
     const matchesCompany = selectedCompany === '' || product.company_id?.toString() === selectedCompany;
-    
+
     return matchesSearch && matchesCategory && matchesCompany;
   });
 
@@ -172,7 +172,7 @@ const ProductsPage = () => {
   return (
     <div className="min-h-screen bg-neutral-950">
       <RetailerNavbar />
-      
+
       <div className="container mx-auto p-6 space-y-6">
         {/* Header */}
         <div className="bg-neutral-900 rounded-lg shadow border border-neutral-800 p-6">
@@ -266,7 +266,7 @@ const ProductsPage = () => {
                 <Package className="h-16 w-16 text-neutral-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-white mb-2">No products found</h3>
                 <p className="text-neutral-400">
-                  {companies.length === 0 
+                  {companies.length === 0
                     ? 'Connect to companies to see their products'
                     : search || selectedCategory || selectedCompany
                       ? 'Try adjusting your filters'
@@ -283,7 +283,7 @@ const ProductsPage = () => {
                       alt={product.name}
                       className="w-full h-48 object-cover rounded-lg mb-4"
                     />
-                    
+
                     <div className="space-y-2">
                       <div className="flex items-start justify-between">
                         <h3 className="text-lg font-semibold text-white line-clamp-2">{product.name}</h3>
@@ -294,20 +294,19 @@ const ProductsPage = () => {
                           </div>
                         )}
                       </div>
-                      
+
                       <p className="text-neutral-400 text-sm">{product.category}</p>
-                      
+
                       {product.description && (
                         <p className="text-neutral-500 text-sm line-clamp-2">{product.description}</p>
                       )}
-                      
+
                       <div className="flex items-center justify-between">
                         <span className="text-xl font-bold text-white">${product.price.toFixed(2)}</span>
-                        <span className={`text-sm px-2 py-1 rounded-full ${
-                          product.stock > 10 ? 'bg-green-900/30 text-green-400' :
-                          product.stock > 0 ? 'bg-yellow-900/30 text-yellow-400' :
-                          'bg-red-900/30 text-red-400'
-                        }`}>
+                        <span className={`text-sm px-2 py-1 rounded-full ${product.stock > 10 ? 'bg-green-900/30 text-green-400' :
+                            product.stock > 0 ? 'bg-yellow-900/30 text-yellow-400' :
+                              'bg-red-900/30 text-red-400'
+                          }`}>
                           {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
                         </span>
                       </div>
@@ -331,7 +330,7 @@ const ProductsPage = () => {
                             </button>
                           </div>
                         ) : (
-                          <button 
+                          <button
                             onClick={() => addToCart(product.id)}
                             disabled={product.stock === 0}
                             className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
