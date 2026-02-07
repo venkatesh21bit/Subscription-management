@@ -75,7 +75,7 @@ class SubscriptionInvoiceService:
                 status=InvoiceStatus.DRAFT,
                 due_date=timezone.now().date() + timedelta(days=30),
                 currency=currency,
-                financial_year=subscription.company.financialyear_set.filter(is_current=True).first(),
+                financial_year=subscription.company.company_financialyear_set.filter(is_current=True).first(),
                 billing_period_start=billing_period_start,
                 billing_period_end=billing_period_end,
                 is_auto_generated=True,
