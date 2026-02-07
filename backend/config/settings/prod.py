@@ -26,6 +26,9 @@ DATABASES = {
 # If using external database, uncomment and set ssl_require=True
 
 # CORS Configuration for production
+# Temporarily allow all origins for debugging
+CORS_ALLOW_ALL_ORIGINS = True
+
 CORS_ALLOWED_ORIGINS = [
     "https://frontend-production-fbef1.up.railway.app",
     "https://vendor-frontend-production-be99.up.railway.app",
