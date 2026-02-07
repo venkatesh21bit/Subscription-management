@@ -6,6 +6,7 @@ from django.urls import path
 from apps.portal.api.views_retailer import (
     RetailerRegisterView,
     RetailerCompleteProfileView,
+    RetailerProfileView,
     RetailerApproveView,
     RetailerRejectView,
     RetailerListView,
@@ -36,6 +37,7 @@ urlpatterns = [
     # Retailer onboarding (authenticated - user already registered via /users/register/)
     path('register/', RetailerRegisterView.as_view(), name='retailer-register'),
     path('complete-profile/', RetailerCompleteProfileView.as_view(), name='retailer-complete-profile'),
+    path('profile/', RetailerProfileView.as_view(), name='retailer-profile'),
     path('companies/discover/', CompanyDiscoveryView.as_view(), name='company-discovery'),
     
     # Retailer company connection

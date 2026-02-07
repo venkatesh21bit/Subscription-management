@@ -123,6 +123,140 @@ class RetailerRegisterView(APIView):
 
 
 # ================================================================
+# RETAILER PROFILE VIEW/UPDATE
+# ================================================================
+class RetailerProfileView(APIView):
+    """
+    View and update retailer profile with full details including address.
+    
+    GET: Fetch complete retailer profile with Party/Address data
+    PATCH: Update retailer profile fields
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """
+        Get full retailer profile including linked party/address info.
+        
+        Returns:
+            id, username, email, first_name, last_name, phone,
+            company_name, address, city, state, country, postal_code
+        """
+        user = request.user
+        
+        # Base profile from User model
+        profile_data = {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'phone': user.phone or '',
+            'company_name': '',
+            'address': '',
+            'city': '',
+            'state': '',
+            'country': '',
+            'postal_code': ''
+        }
+        
+        # Try to get retailer mappings and party info
+        try:
+            # Get first approved retailer mapping with party
+            retailer_user = RetailerUser.objects.filter(
+                user=user,
+                status='APPROVED'
+            ).select_related('party', 'company').first()
+            
+            if not retailer_user:
+                # Fall back to any retailer mapping
+                retailer_user = RetailerUser.objects.filter(
+                    user=user
+                ).select_related('party', 'company').first()
+            
+            if retailer_user:
+                # Get company name
+                if retailer_user.company:
+                    profile_data['company_name'] = retailer_user.company.name
+                
+                # Get address from party if available
+                if retailer_user.party:
+                    party = retailer_user.party
+                    # Get primary or first address
+                    address = party.addresses.filter(is_default=True).first()
+                    if not address:
+                        address = party.addresses.first()
+                    
+                    if address:
+                        profile_data['address'] = address.line1 + (f', {address.line2}' if address.line2 else '')
+                        profile_data['city'] = address.city
+                        profile_data['state'] = address.state
+                        profile_data['country'] = address.country
+                        profile_data['postal_code'] = address.pincode
+            
+            # Fallback: Also check RetailerCompanyAccess if company_name still empty
+            if not profile_data['company_name']:
+                from apps.portal.models import RetailerCompanyAccess
+                access = RetailerCompanyAccess.objects.filter(
+                    retailer__user=user,
+                    status='APPROVED'
+                ).select_related('company').first()
+                
+                if not access:
+                    # Try any access request
+                    access = RetailerCompanyAccess.objects.filter(
+                        retailer__user=user
+                    ).select_related('company').first()
+                
+                if access and access.company:
+                    profile_data['company_name'] = access.company.name
+                    
+        except Exception as e:
+            # Log error but continue with base profile
+            print(f"Error fetching retailer details: {e}")
+        
+        return Response(profile_data, status=status.HTTP_200_OK)
+    
+    def patch(self, request):
+        """
+        Update retailer profile fields.
+        
+        Updatable fields:
+            first_name, last_name, phone
+            (Address updates require party to be set up)
+        """
+        user = request.user
+        data = request.data
+        updated_fields = []
+        
+        try:
+            # Update user fields
+            if 'first_name' in data:
+                user.first_name = data['first_name']
+                updated_fields.append('first_name')
+            if 'last_name' in data:
+                user.last_name = data['last_name']
+                updated_fields.append('last_name')
+            if 'phone' in data:
+                user.phone = data['phone']
+                updated_fields.append('phone')
+            
+            if updated_fields:
+                user.save(update_fields=updated_fields)
+            
+            return Response({
+                'detail': 'Profile updated successfully',
+                'updated_fields': updated_fields
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Profile update failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# ================================================================
 # RETAILER PROFILE COMPLETION (with address)
 # ================================================================
 class RetailerCompleteProfileView(APIView):

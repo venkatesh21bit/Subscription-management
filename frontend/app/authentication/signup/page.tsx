@@ -197,7 +197,7 @@ const SignUpPage = () => {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Min 8 characters"
+                  placeholder="Enter a strong password"
                   className="bg-gray-900 text-white border border-gray-700 pr-10"
                   {...register("password")}
                 />
@@ -211,6 +211,17 @@ const SignUpPage = () => {
               </div>
               {errors.password && (
                 <p className="text-red-500 text-sm">{errors.password.message}</p>
+              )}
+              {!errors.password && (
+                <div className="text-xs text-gray-400 space-y-1">
+                  <p>Password must contain:</p>
+                  <ul className="list-disc list-inside ml-2 space-y-0.5">
+                    <li>More than 8 characters</li>
+                    <li>At least one uppercase letter</li>
+                    <li>At least one lowercase letter</li>
+                    <li>At least one special character (!@#$%^&*...)</li>
+                  </ul>
+                </div>
               )}
             </div>
 
