@@ -22,11 +22,11 @@ python manage.py create_default_superuser
 
 echo "======================================"
 # Start Gunicorn server
-# Force port 8000 to match Railway public networking config
-echo "Starting Gunicorn server on port 8000..."
+# Force port 8080 to match Railway public networking config
+echo "Starting Gunicorn server on port 8080..."
 echo "DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE}"
 exec gunicorn config.wsgi:application \
-    --bind 0.0.0.0:8000 \
+    --bind 0.0.0.0:8080 \
     --workers 4 \
     --timeout 120 \
     --worker-class sync \
