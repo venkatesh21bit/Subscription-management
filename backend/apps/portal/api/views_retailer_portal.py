@@ -270,16 +270,7 @@ class RetailerPlaceOrderView(APIView):
         """Place order with company."""
         user = request.user
         
-        # Get retailer profile for the target company
         company_id = request.data.get('company_id')
-        retailer = RetailerUser.objects.filter(user=user).first()
-        if not retailer:
-            return Response(
-                {"error": "Retailer profile not found"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Validate request data
         items = request.data.get('items', [])
         
         if not company_id:
@@ -294,19 +285,33 @@ class RetailerPlaceOrderView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Verify connection exists and is approved
-        try:
-            connection = RetailerCompanyAccess.objects.select_related('company').get(
+        # Get the retailer profile for this specific company
+        retailer = RetailerUser.objects.filter(
+            user=user, company_id=company_id
+        ).select_related('party', 'company').first()
+        
+        if not retailer:
+            return Response(
+                {"error": "Retailer profile not found for this company"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Verify approved — check RetailerUser.status OR RetailerCompanyAccess
+        is_approved = retailer.status == 'APPROVED'
+        if not is_approved:
+            is_approved = RetailerCompanyAccess.objects.filter(
                 retailer=retailer,
                 company_id=company_id,
                 status='APPROVED'
-            )
-            company = connection.company
-        except RetailerCompanyAccess.DoesNotExist:
+            ).exists()
+        
+        if not is_approved:
             return Response(
-                {"error": "You are not connected to this company or connection is not approved"},
+                {"error": "Your connection to this company is not yet approved"},
                 status=status.HTTP_403_FORBIDDEN
             )
+        
+        company = retailer.company
         
         # Get retailer's party in this company
         party = retailer.party
