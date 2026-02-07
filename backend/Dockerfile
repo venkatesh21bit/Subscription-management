@@ -37,8 +37,8 @@ RUN python manage.py collectstatic --noinput --clear
 # Make entrypoint script executable
 RUN chmod +x /app/docker-entrypoint.sh
 
-# Expose port (Railway will override with PORT env var)
-EXPOSE 8080
+# Expose port - match Railway networking (Port 8000)
+EXPOSE 8000
 
 # Use entrypoint script
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
