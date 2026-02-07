@@ -34,6 +34,10 @@ urlpatterns = [
     # Subscription workflow: View invoices from subscriptions
     path('subscriptions/<uuid:subscription_id>/invoices/', views.SubscriptionInvoiceListView.as_view(), name='subscription-invoice-list'),
     
+    # Subscription billing: Generate invoices
+    path('subscriptions/<uuid:subscription_id>/generate-invoice/', views.SubscriptionGenerateInvoiceView.as_view(), name='subscription-generate-invoice'),
+    path('subscriptions/bulk-billing/', views.SubscriptionBulkBillingView.as_view(), name='subscription-bulk-billing'),
+    
     # Order workflow: Create invoice from order
     path('orders/<uuid:order_id>/create-invoice/', views.OrderCreateInvoiceView.as_view(), name='order-create-invoice'),
     
@@ -49,6 +53,9 @@ urlpatterns = [
     # Quotations
     path('quotations/', views.QuotationListCreateView.as_view(), name='quotation-list-create'),
     path('quotations/<uuid:quotation_id>/', views.QuotationDetailView.as_view(), name='quotation-detail'),
+    path('quotations/<uuid:quotation_id>/send/', views.QuotationSendView.as_view(), name='quotation-send'),
+    path('quotations/<uuid:quotation_id>/accept/', views.QuotationAcceptView.as_view(), name='quotation-accept'),
+    path('quotations/<uuid:quotation_id>/reject/', views.QuotationRejectView.as_view(), name='quotation-reject'),
     
     # Configuration endpoints
     path('discounts/', DiscountListCreateView.as_view(), name='discount-list-create'),

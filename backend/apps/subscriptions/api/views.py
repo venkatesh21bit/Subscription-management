@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q, Prefetch
 from django.utils import timezone
+from decimal import Decimal
 
 from apps.subscriptions.models import (
     Subscription,
@@ -16,7 +17,8 @@ from apps.subscriptions.models import (
     QuotationTemplate,
     Quotation,
     QuotationItem,
-    SubscriptionStatus
+    SubscriptionStatus,
+    QuotationStatus
 )
 from apps.orders.models import SalesOrder, OrderStatus
 from apps.invoice.models import Invoice, InvoiceType, InvoiceStatus
@@ -502,9 +504,23 @@ class QuotationListCreateView(APIView):
     
     def get(self, request):
         """List all quotations with filtering."""
-        quotations = Quotation.objects.filter(
-            company=request.company
-        ).select_related('party', 'plan', 'currency').order_by('-created_at')
+        # Check if user is a retailer viewing quotations sent to them
+        from apps.party.models import RetailerUser
+        retailer_mappings = RetailerUser.objects.filter(
+            user=request.user,
+            status='APPROVED'
+        ).values_list('party_id', flat=True)
+        
+        if retailer_mappings.exists():
+            # Retailer: show quotations where party is one of their linked parties
+            quotations = Quotation.objects.filter(
+                party_id__in=retailer_mappings
+            ).select_related('party', 'plan', 'currency').order_by('-created_at')
+        else:
+            # Manufacturer: show quotations created by their company
+            quotations = Quotation.objects.filter(
+                company=request.company
+            ).select_related('party', 'plan', 'currency').order_by('-created_at')
         
         # Apply filters
         status_filter = request.query_params.get('status')
@@ -525,11 +541,78 @@ class QuotationListCreateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Implementation would go here
-        return Response(
-            {'message': 'Quotation creation endpoint'},
-            status=status.HTTP_501_NOT_IMPLEMENTED
+        # Extract required fields
+        party_id = request.data.get('party_id')
+        plan_id = request.data.get('plan_id')
+        valid_until = request.data.get('valid_until')
+        start_date = request.data.get('start_date')
+        items = request.data.get('items', [])
+        
+        if not all([party_id, plan_id, valid_until, start_date]):
+            return Response(
+                {'error': 'party_id, plan_id, valid_until, and start_date are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get related objects
+        try:
+            from apps.party.models import Party
+            party = Party.objects.get(id=party_id, company=request.company)
+            plan = SubscriptionPlan.objects.get(id=plan_id, company=request.company)
+            currency = request.company.base_currency
+        except (Party.DoesNotExist, SubscriptionPlan.DoesNotExist):
+            return Response(
+                {'error': 'Party or plan not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Parse dates
+        if isinstance(valid_until, str):
+            valid_until = date.fromisoformat(valid_until)
+        if isinstance(start_date, str):
+            start_date = date.fromisoformat(start_date)
+        
+        # Calculate total amount from items
+        total_amount = sum(
+            Decimal(str(item.get('quantity', 0))) * Decimal(str(item.get('unit_price', 0)))
+            for item in items
         )
+        
+        # Create quotation
+        quotation = Quotation.objects.create(
+            company=request.company,
+            party=party,
+            plan=plan,
+            status=QuotationStatus.DRAFT,
+            valid_until=valid_until,
+            start_date=start_date,
+            total_amount=total_amount,
+            currency=currency,
+            terms_and_conditions=request.data.get('terms_and_conditions', ''),
+            notes=request.data.get('notes', '')
+        )
+        
+        # Create quotation items
+        from apps.products.models import Product
+        for item_data in items:
+            try:
+                product = Product.objects.get(
+                    id=item_data.get('product_id'),
+                    company=request.company
+                )
+                QuotationItem.objects.create(
+                    quotation=quotation,
+                    product=product,
+                    quantity=item_data.get('quantity', 1),
+                    unit_price=Decimal(str(item_data.get('unit_price', 0))),
+                    discount_pct=Decimal(str(item_data.get('discount_pct', 0))),
+                    tax_rate=Decimal(str(item_data.get('tax_rate', 0)))
+                )
+            except Product.DoesNotExist:
+                pass  # Skip invalid products
+        
+        serializer = QuotationDetailSerializer(quotation)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class QuotationDetailView(APIView):
@@ -539,14 +622,31 @@ class QuotationDetailView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get_object(self, request, quotation_id):
-        """Get quotation ensuring company scope."""
+        """Get quotation ensuring proper access (company for manufacturer, party for retailer)."""
         try:
-            return Quotation.objects.select_related(
-                'party', 'plan', 'currency', 'template'
-            ).prefetch_related('items').get(
-                id=quotation_id,
-                company=request.company
-            )
+            # Check if user is a retailer
+            from apps.party.models import RetailerUser
+            retailer_mappings = RetailerUser.objects.filter(
+                user=request.user,
+                status='APPROVED'
+            ).values_list('party_id', flat=True)
+            
+            if retailer_mappings.exists():
+                # Retailer: can access quotations where party is one of their linked parties
+                return Quotation.objects.select_related(
+                    'party', 'plan', 'currency', 'template'
+                ).prefetch_related('items').get(
+                    id=quotation_id,
+                    party_id__in=retailer_mappings
+                )
+            else:
+                # Manufacturer: can access quotations created by their company
+                return Quotation.objects.select_related(
+                    'party', 'plan', 'currency', 'template'
+                ).prefetch_related('items').get(
+                    id=quotation_id,
+                    company=request.company
+                )
         except Quotation.DoesNotExist:
             return None
     
@@ -561,6 +661,215 @@ class QuotationDetailView(APIView):
         
         serializer = QuotationDetailSerializer(quotation)
         return Response(serializer.data)
+
+
+class QuotationAcceptView(APIView):
+    """
+    Accept a quotation and convert it to a subscription.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, quotation_id):
+        """Accept a quotation."""
+        try:
+            # Check if user is a retailer
+            from apps.party.models import RetailerUser
+            retailer_mappings = RetailerUser.objects.filter(
+                user=request.user,
+                status='APPROVED'
+            ).values_list('party_id', flat=True)
+            
+            if retailer_mappings.exists():
+                # Retailer: can accept quotations where party is one of their linked parties
+                quotation = Quotation.objects.select_related(
+                    'party', 'plan', 'currency'
+                ).get(id=quotation_id, party_id__in=retailer_mappings)
+            else:
+                # Manufacturer: can access their company's quotations
+                quotation = Quotation.objects.select_related(
+                    'party', 'plan', 'currency'
+                ).get(id=quotation_id, company=request.company)
+        except Quotation.DoesNotExist:
+            return Response(
+                {'error': 'Quotation not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Validate quotation status
+        if quotation.status != QuotationStatus.SENT:
+            return Response(
+                {'error': 'Only sent quotations can be accepted'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if expired
+        if quotation.valid_until < date.today():
+            quotation.status = QuotationStatus.EXPIRED
+            quotation.save()
+            return Response(
+                {'error': 'This quotation has expired'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if already has a subscription
+        if quotation.subscription:
+            return Response(
+                {'error': 'This quotation has already been accepted'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create subscription from quotation
+        try:
+            # Calculate monthly value from quotation items first
+            quotation_items = QuotationItem.objects.filter(quotation=quotation)
+            monthly_value = sum(
+                Decimal(str(item.quantity)) * Decimal(str(item.unit_price))
+                for item in quotation_items
+            ) or quotation.plan.base_price or Decimal('0.00')
+            
+            # Create subscription with monthly value pre-calculated
+            subscription = Subscription.objects.create(
+                company=quotation.company,
+                party=quotation.party,
+                plan=quotation.plan,
+                status=SubscriptionStatus.CONFIRMED,
+                start_date=quotation.start_date,
+                next_billing_date=quotation.start_date,
+                currency=quotation.currency,
+                confirmed_at=timezone.now(),
+                quotation_template=quotation.template,
+                monthly_value=monthly_value
+            )
+            
+            # Copy quotation items to subscription
+            for item in quotation_items:
+                SubscriptionItem.objects.create(
+                    subscription=subscription,
+                    product=item.product,
+                    product_variant=item.product_variant,
+                    quantity=item.quantity,
+                    unit_price=item.unit_price,
+                    discount_pct=item.discount_pct,
+                    tax_rate=item.tax_rate,
+                    description=''
+                )
+            
+            # Update quotation using update() to avoid save() method
+            Quotation.objects.filter(id=quotation.id).update(
+                status=QuotationStatus.ACCEPTED,
+                accepted_at=timezone.now(),
+                subscription=subscription
+            )
+            
+            return Response({
+                'message': 'Quotation accepted successfully',
+                'subscription_id': str(subscription.id),
+                'subscription_number': subscription.subscription_number
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            # If anything fails, log the error and return a proper error response
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'error': f'Failed to accept quotation: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class QuotationRejectView(APIView):
+    """
+    Reject a quotation.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, quotation_id):
+        """Reject a quotation."""
+        try:
+            # Check if user is a retailer
+            from apps.party.models import RetailerUser
+            retailer_mappings = RetailerUser.objects.filter(
+                user=request.user,
+                status='APPROVED'
+            ).values_list('party_id', flat=True)
+            
+            if retailer_mappings.exists():
+                # Retailer: can reject quotations where party is one of their linked parties
+                quotation = Quotation.objects.get(
+                    id=quotation_id,
+                    party_id__in=retailer_mappings
+                )
+            else:
+                # Manufacturer: can access their company's quotations
+                quotation = Quotation.objects.get(
+                    id=quotation_id,
+                    company=request.company
+                )
+        except Quotation.DoesNotExist:
+            return Response(
+                {'error': 'Quotation not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Validate quotation status
+        if quotation.status != QuotationStatus.SENT:
+            return Response(
+                {'error': 'Only sent quotations can be rejected'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update quotation
+        quotation.status = QuotationStatus.REJECTED
+        quotation.rejected_at = timezone.now()
+        quotation.rejection_reason = request.data.get('reason', '')
+        quotation.save()
+        
+        return Response({
+            'message': 'Quotation rejected'
+        }, status=status.HTTP_200_OK)
+
+
+class QuotationSendView(APIView):
+    """
+    Send a quotation to the customer (change status to SENT).
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, quotation_id):
+        """Send a quotation."""
+        try:
+            quotation = Quotation.objects.get(
+                id=quotation_id,
+                company=request.company
+            )
+        except Quotation.DoesNotExist:
+            return Response(
+                {'error': 'Quotation not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Validate quotation status
+        if quotation.status != QuotationStatus.DRAFT:
+            return Response(
+                {'error': 'Only draft quotations can be sent'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate quotation has items
+        if not quotation.items.exists():
+            return Response(
+                {'error': 'Cannot send quotation without items'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update quotation
+        quotation.status = QuotationStatus.SENT
+        quotation.sent_at = timezone.now()
+        quotation.save()
+        
+        return Response({
+            'message': 'Quotation sent successfully',
+            'quotation_number': quotation.quotation_number
+        }, status=status.HTTP_200_OK)
 
 
 class SubscriptionCreateOrderView(APIView):
@@ -928,3 +1237,69 @@ class SubscriptionInvoiceListView(APIView):
             'invoices': list(invoices),
             'count': invoices.count()
         })
+
+
+class SubscriptionGenerateInvoiceView(APIView):
+    """
+    Generate invoice from a subscription.
+    
+    POST /subscriptions/{id}/generate-invoice/
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, subscription_id):
+        """Generate invoice from subscription."""
+        try:
+            subscription = Subscription.objects.get(
+                id=subscription_id,
+                company=request.company
+            )
+        except Subscription.DoesNotExist:
+            return Response(
+                {'error': 'Subscription not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Import the service
+        from apps.subscriptions.services.invoice_service import SubscriptionInvoiceService
+        
+        # Get optional parameters
+        auto_post = request.data.get('auto_post', False)
+        
+        # Generate and send invoice
+        result = SubscriptionInvoiceService.send_invoice_to_retailer(
+            subscription, 
+            auto_post=auto_post
+        )
+        
+        if result['success']:
+            return Response(result, status=status.HTTP_201_CREATED)
+        else:
+            return Response(
+                {'error': result['message']},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class SubscriptionBulkBillingView(APIView):
+    """
+    Process bulk billing for all due subscriptions.
+    
+    POST /subscriptions/bulk-billing/
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        """Process bulk billing for company subscriptions."""
+        # Import the service
+        from apps.subscriptions.services.invoice_service import SubscriptionInvoiceService
+        
+        # Process billing for all subscriptions in this company
+        results = SubscriptionInvoiceService.process_billing_for_all_subscriptions(
+            company=request.company
+        )
+        
+        return Response({
+            'message': 'Bulk billing processing completed',
+            'results': results
+        }, status=status.HTTP_200_OK)

@@ -527,6 +527,7 @@ class Subscription(CompanyScopedModel):
     
     # Payment terms
     payment_terms = models.TextField(
+        null=True,
         blank=True,
         help_text="Payment terms and conditions"
     )
@@ -626,11 +627,8 @@ class Subscription(CompanyScopedModel):
             
             self.subscription_number = f"{prefix}-{new_num:06d}"
         
-        # Calculate monthly value for MRR tracking - only for existing instances
-        if self.pk and (not self.monthly_value or self.monthly_value == 0):
-            self.monthly_value = self.calculate_monthly_value()
-        elif not self.pk and not self.monthly_value:
-            # For new instances, set to plan base price initially
+        # Set default monthly value for new instances only
+        if not self.pk and not self.monthly_value and self.plan:
             self.monthly_value = self.plan.base_price or Decimal('0.00')
         
         super().save(*args, **kwargs)

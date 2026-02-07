@@ -7,7 +7,7 @@ import { logout } from "@/utils/api";
 export const NAVLINKS = [
   { title: "Subscriptions", href: "/manufacturer/subscriptions" },
   { title: "Dashboard", href: "/manufacturer" },
-  { title: "Accounting", href: "/manufacturer/accounting" },
+  { title: "Bills", href: "/manufacturer/bills" },
   { title: "Products", href: "/manufacturer/products" },
   { title: "Connections", href: "/manufacturer/connections" },
   { title: "Company Code", href: "/manufacturer/company-code" },

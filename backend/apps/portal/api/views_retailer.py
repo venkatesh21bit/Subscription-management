@@ -262,27 +262,44 @@ class RetailerApproveView(APIView):
                 retailer_user.party = party
             elif create_party:
                 # Create new party for retailer
-                from apps.accounting.models import Ledger, LedgerGroup
+                from apps.accounting.models import Ledger, AccountGroup
+                from apps.company.models import FinancialYear
+                
+                # Get current financial year for the company
+                current_fy = FinancialYear.objects.filter(
+                    company=company,
+                    is_current=True
+                ).first()
                 
                 # Get or create Sundry Debtors group
-                debtors_group = LedgerGroup.objects.filter(
+                debtors_group = AccountGroup.objects.filter(
                     company=company,
                     name__icontains='sundry debtor'
                 ).first()
                 
                 if not debtors_group:
-                    debtors_group = LedgerGroup.objects.filter(
+                    debtors_group = AccountGroup.objects.filter(
                         company=company,
-                        group_type='CURRENT_ASSET'
+                        nature='ASSET'
                     ).first()
                 
-                # Create ledger for party
-                ledger = Ledger.objects.create(
-                    company=company,
-                    name=f"{retailer_user.user.email} (Retailer)",
-                    ledger_group=debtors_group,
-                    created_by=request.user
-                )
+                # Create ledger for party only if both group and financial year exist
+                ledger = None
+                if debtors_group and current_fy:
+                    # Generate unique code
+                    import uuid
+                    ledger_code = f"RET-{str(uuid.uuid4())[:8]}"
+                    
+                    ledger = Ledger.objects.create(
+                        company=company,
+                        name=f"{retailer_user.user.email} (Retailer)",
+                        code=ledger_code,
+                        group=debtors_group,
+                        account_type='CUSTOMER',
+                        opening_balance_fy=current_fy,
+                        opening_balance=0,
+                        opening_balance_type='DR'
+                    )
                 
                 # Create party
                 party = Party.objects.create(

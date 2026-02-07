@@ -381,6 +381,10 @@ class SubscriptionCreateUpdateSerializer(serializers.ModelSerializer):
         if 'payment_method' not in validated_data or validated_data.get('payment_method') is None:
             validated_data['payment_method'] = ''
         
+        # Handle payment_terms - set empty string if None for consistency
+        if 'payment_terms' not in validated_data or validated_data.get('payment_terms') is None:
+            validated_data['payment_terms'] = ''
+        
         return super().create(validated_data)
 
 

@@ -410,49 +410,49 @@ export default function CreateSubscriptionPage() {
                 return
             }
 
-            // Prepare subscription data
-            const subscriptionData = {
-                party: selectedCustomer,
-                plan: selectedRecurringPlan,
-                quotation_template: selectedTemplate || null,
-                start_date: startDate || new Date().toISOString().split('T')[0],
-                end_date: expiration || null,
-                next_billing_date: nextInvoice || new Date().toISOString().split('T')[0],
-                payment_terms: paymentTerms || null,
-                payment_method: paymentMethod || null,
-                payment_done: paymentDone,
-                status: 'QUOTATION',
-                currency: null // Will be set by backend based on company default
-            }
+            // Calculate dates
+            const today = new Date()
+            const validUntilDate = expiration || new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+            const subscriptionStartDate = startDate || today.toISOString().split('T')[0]
 
-            // Create subscription
-            const response = await apiClient.post<{ id: string }>('/subscriptions/subscriptions/', subscriptionData)
-            const createdSubscription = response.data as { id: string }
-            if (!createdSubscription?.id) {
-                throw new Error('Failed to create subscription: no ID returned')
-            }
-            setSubscriptionId(createdSubscription.id)
-
-            // Create subscription items (order lines)
-            const itemPromises = orderLines.map(line => 
-                apiClient.post(`/subscriptions/subscriptions/${createdSubscription.id}/items/`, {
-                    product: line.product_id,
+            // Prepare quotation data
+            const quotationData = {
+                party_id: selectedCustomer,
+                plan_id: selectedRecurringPlan,
+                valid_until: validUntilDate,
+                start_date: subscriptionStartDate,
+                terms_and_conditions: paymentTerms || '',
+                notes: '',
+                items: orderLines.map(line => ({
+                    product_id: line.product_id,
                     quantity: line.quantity,
                     unit_price: line.unit_price,
                     discount_pct: line.discount,
                     tax_rate: line.taxes,
                     description: line.product_name
-                })
-            )
+                }))
+            }
 
-            await Promise.all(itemPromises)
+            // Create quotation
+            const createResponse = await apiClient.post<{ id: string }>('/subscriptions/quotations/', quotationData)
+            const createdQuotation = createResponse.data as { id: string }
+            if (!createdQuotation?.id) {
+                throw new Error('Failed to create quotation: no ID returned')
+            }
+
+            // Send the quotation (change status from DRAFT to SENT)
+            await apiClient.post(`/subscriptions/quotations/${createdQuotation.id}/send/`, {})
 
             // Update status to Quotation Sent
             setStatus("Quotation Sent")
-            alert('Subscription sent successfully!')
+            alert('Subscription offer sent successfully to retailer!')
+            
+            // Optionally redirect to subscriptions list
+            // window.location.href = '/manufacturer/subscriptions'
         } catch (error: any) {
-            console.error('Error sending subscription:', error)
-            alert(`Failed to send subscription: ${error.response?.data?.error || error.message || 'Unknown error'}`)
+            console.error('Error sending subscription offer:', error)
+            const errorMessage = error.response?.data?.error || error.message || 'Unknown error'
+            alert(`Failed to send subscription offer: ${errorMessage}`)
         } finally {
             setLoading(false)
         }
@@ -478,42 +478,43 @@ export default function CreateSubscriptionPage() {
                     return
                 }
 
-                // Prepare subscription data
-                const subscriptionData = {
-                    party: selectedCustomer,
-                    plan: selectedRecurringPlan,
-                    quotation_template: selectedTemplate || null,
-                    start_date: startDate || new Date().toISOString().split('T')[0],
-                    end_date: expiration || null,
-                    next_billing_date: nextInvoice || new Date().toISOString().split('T')[0],
-                    payment_terms: paymentTerms || null,
-                    payment_method: paymentMethod || null,
-                    payment_done: paymentDone,
-                    status: 'CONFIRMED',
-                    currency: null // Will be set by backend based on company default
-                }
+                // Calculate dates
+                const today = new Date()
+                const validUntilDate = expiration || new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                const subscriptionStartDate = startDate || today.toISOString().split('T')[0]
 
-                // Create subscription
-                const response = await apiClient.post<{ id: string }>('/subscriptions/subscriptions/', subscriptionData)
-                const createdSubscription = response.data
-                if (!createdSubscription?.id) {
-                    throw new Error('Failed to create subscription: no ID returned')
-                }
-                setSubscriptionId(createdSubscription.id)
-
-                // Create subscription items (order lines)
-                const itemPromises = orderLines.map(line => 
-                    apiClient.post(`/subscriptions/subscriptions/${createdSubscription.id}/items/`, {
-                        product: line.product_id,
+                // Prepare quotation data
+                const quotationData = {
+                    party_id: selectedCustomer,
+                    plan_id: selectedRecurringPlan,
+                    valid_until: validUntilDate,
+                    start_date: subscriptionStartDate,
+                    status: 'ACCEPTED', // Auto-accept since this is a direct confirm
+                    terms_and_conditions: paymentTerms || '',
+                    notes: '',
+                    items: orderLines.map(line => ({
+                        product_id: line.product_id,
                         quantity: line.quantity,
                         unit_price: line.unit_price,
                         discount_pct: line.discount,
                         tax_rate: line.taxes,
                         description: line.product_name
-                    })
-                )
+                    }))
+                }
 
-                await Promise.all(itemPromises)
+                // Create quotation and immediately accept it (which creates subscription)
+                const createResponse = await apiClient.post<{ id: string }>('/subscriptions/quotations/', quotationData)
+                const createdQuotation = createResponse.data
+                if (!createdQuotation?.id) {
+                    throw new Error('Failed to create quotation: no ID returned')
+                }
+
+                // Accept the quotation to create the subscription
+                const acceptResponse = await apiClient.post(`/subscriptions/quotations/${createdQuotation.id}/accept/`, {})
+                const acceptedData = acceptResponse.data as { subscription_id: string }
+                if (acceptedData?.subscription_id) {
+                    setSubscriptionId(acceptedData.subscription_id)
+                }
             } else {
                 // Update existing subscription status to CONFIRMED
                 await apiClient.post(`/subscriptions/subscriptions/${subscriptionId}/status/`, {

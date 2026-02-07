@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Search, Plus, Trash2 } from "lucide-react"
+import { Search, Plus, Trash2, Receipt, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { toast } from "sonner"
 import {
     Table,
     TableBody,
@@ -69,6 +70,8 @@ export default function SubscriptionsPage() {
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [sendingInvoice, setSendingInvoice] = useState<string | null>(null)
+    const [bulkBilling, setBulkBilling] = useState(false)
 
     // Fetch subscriptions from API
     const fetchSubscriptions = async () => {
@@ -98,6 +101,64 @@ export default function SubscriptionsPage() {
     useEffect(() => {
         fetchSubscriptions()
     }, [])
+
+    // Send invoice for a subscription
+    const handleSendInvoice = async (subscriptionId: string) => {
+        try {
+            setSendingInvoice(subscriptionId)
+            
+            const response = await api<{ invoice: { invoice_number: string } }>(
+                `/subscriptions/subscriptions/${subscriptionId}/generate-invoice/`,
+                { 
+                    method: 'POST',
+                    body: JSON.stringify({
+                        auto_post: true
+                    })
+                }
+            )
+            
+            if (response.error) {
+                toast.error(response.error)
+            } else if (response.data) {
+                toast.success(`Invoice ${response.data.invoice.invoice_number} sent successfully!`)
+                // Optionally refresh subscriptions to update status
+                fetchSubscriptions()
+            }
+        } catch (err) {
+            toast.error('Failed to send invoice')
+            console.error('Error sending invoice:', err)
+        } finally {
+            setSendingInvoice(null)
+        }
+    }
+
+    // Process bulk billing
+    const handleBulkBilling = async () => {
+        try {
+            setBulkBilling(true)
+            
+            const response = await api<{ results: { successful: number; failed: number } }>(
+                '/subscriptions/subscriptions/bulk-billing/',
+                { method: 'POST' }
+            )
+            
+            if (response.error) {
+                toast.error(response.error)
+            } else if (response.data) {
+                const { results } = response.data
+                toast.success(
+                    `Bulk billing completed! ${results.successful} invoices created, ${results.failed} failed.`
+                )
+                // Refresh subscriptions
+                fetchSubscriptions()
+            }
+        } catch (err) {
+            toast.error('Failed to process bulk billing')
+            console.error('Error processing bulk billing:', err)
+        } finally {
+            setBulkBilling(false)
+        }
+    }
 
     // Filter subscriptions based on search query
     const filteredSubscriptions = subscriptions.filter((sub) =>
@@ -159,6 +220,15 @@ export default function SubscriptionsPage() {
                     {/* Action Buttons */}
                     <div className="flex gap-2">
                         <Button
+                            variant="outline"
+                            className="gap-2"
+                            onClick={handleBulkBilling}
+                            disabled={bulkBilling || loading}
+                        >
+                            <Receipt className="h-4 w-4" />
+                            {bulkBilling ? 'Processing...' : 'Bulk Billing'}
+                        </Button>
+                        <Button
                             variant="default"
                             className="gap-2"
                             onClick={() => router.push("/manufacturer/subscriptions/create")}
@@ -198,6 +268,7 @@ export default function SubscriptionsPage() {
                             <TableHead>Recurring</TableHead>
                             <TableHead>Plan</TableHead>
                             <TableHead>Status</TableHead>
+                            <TableHead className="w-[120px]">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -209,7 +280,7 @@ export default function SubscriptionsPage() {
                             </TableRow>
                         ) : error ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center py-8 text-red-500">
+                                <TableCell colSpan={8} className="text-center py-8 text-red-500">
                                     Error: {error}
                                     <Button 
                                         variant="outline" 
@@ -243,11 +314,26 @@ export default function SubscriptionsPage() {
                                             {subscription.status_display}
                                         </Badge>
                                     </TableCell>
+                                    <TableCell>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="gap-1"
+                                            onClick={() => handleSendInvoice(subscription.id)}
+                                            disabled={
+                                                sendingInvoice === subscription.id || 
+                                                (subscription.status !== 'ACTIVE' && subscription.status !== 'CONFIRMED')
+                                            }
+                                        >
+                                            <Send className="h-3 w-3" />
+                                            {sendingInvoice === subscription.id ? 'Sending...' : 'Send Invoice'}
+                                        </Button>
+                                    </TableCell>
                                 </TableRow>
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                                <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                                     No subscriptions found.
                                 </TableCell>
                             </TableRow>

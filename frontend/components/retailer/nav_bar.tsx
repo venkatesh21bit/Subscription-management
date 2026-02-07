@@ -8,6 +8,8 @@ export const NAVLINKS = [
   { title: "Dashboard", href: "/retailer/dashboard" },
   { title: "Browse Products", href: "/retailer/Products/browse" },
   { title: "Orders", href: "/retailer/Orders" },
+  { title: "Subscriptions", href: "/retailer/subscriptions" },
+  { title: "Bills", href: "/retailer/bills" },
   { title: "Companies", href: "/retailer/companies" },
   { title: "Profile", href: "/retailer/Profile" },
 ];

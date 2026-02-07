@@ -136,10 +136,17 @@ class JoinByCompanyCodeView(APIView):
             if not party:
                 # Create a new party for the retailer
                 from apps.accounting.models import Ledger, AccountGroup
+                from apps.company.models import FinancialYear
                 
                 ledger = None
                 
-                # Try to create a ledger if AccountGroup exists
+                # Get current financial year for the company
+                current_fy = FinancialYear.objects.filter(
+                    company=company,
+                    is_current=True
+                ).first()
+                
+                # Try to create a ledger if AccountGroup and FinancialYear exist
                 debtors_group = AccountGroup.objects.filter(
                     company=company,
                     name__icontains='sundry debtor'
@@ -151,13 +158,21 @@ class JoinByCompanyCodeView(APIView):
                         nature='ASSET'
                     ).first()
                 
-                # Only create ledger if we have a valid group
-                if debtors_group:
+                # Only create ledger if we have both a valid group and financial year
+                if debtors_group and current_fy:
+                    # Generate unique code
+                    import uuid
+                    ledger_code = f"RET-{str(uuid.uuid4())[:8]}"
+                    
                     ledger = Ledger.objects.create(
                         company=company,
                         name=f"{user.get_full_name() or user.email} (Retailer)",
-                        code=f"RET-{user.id}",
-                        group=debtors_group
+                        code=ledger_code,
+                        group=debtors_group,
+                        account_type='CUSTOMER',
+                        opening_balance_fy=current_fy,
+                        opening_balance=0,
+                        opening_balance_type='DR'
                     )
                 
                 # Create party (ledger can be null)
