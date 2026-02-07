@@ -371,9 +371,11 @@ const fetchOrders = useCallback(async () => {
       return;
     }
     // Use documented endpoint: GET /api/orders/sales/
-    const response = await apiClient.get<any[]>(`/orders/sales/`);
+    const response = await apiClient.get<any>(`/orders/sales/`);
     if (response.error) throw new Error(response.error);
-    setOrders(response.data || []);
+    const ordersData = response.data || [];
+    // Handle both flat array and paginated response
+    setOrders(Array.isArray(ordersData) ? ordersData : ordersData.results || []);
   } catch (err) {
     setOrdersError((err as Error).message);
     setOrders([]);
@@ -477,16 +479,20 @@ useEffect(() => {
     }
 
     // Fetch orders to calculate counts
-    const ordersResponse = await apiClient.get<any[]>(`/orders/sales/`);
-    const orders = ordersResponse.data || [];
+    const ordersResponse = await apiClient.get<any>(`/orders/sales/`);
+    const ordersData = ordersResponse.data || [];
+    // Handle both flat array and paginated response
+    const ordersList = Array.isArray(ordersData) ? ordersData : ordersData.results || [];
     
     // Calculate counts from orders
-    const totalOrders = orders.length;
-    const pendingOrders = orders.filter((o: any) => o.status === "DRAFT" || o.status === "CONFIRMED").length;
+    const totalOrders = ordersList.length;
+    const pendingOrders = ordersList.filter((o: any) => o.status === "DRAFT" || o.status === "CONFIRMED").length;
 
     // Fetch parties to get customer/store count
-    const partiesResponse = await apiClient.get<any[]>(`/party/parties/?party_type=CUSTOMER`);
-    const numStores = partiesResponse.data?.length || 0;
+    // API returns {parties: [...]} not a flat array
+    const partiesResponse = await apiClient.get<any>(`/party/parties/?party_type=CUSTOMER`);
+    const partiesData = partiesResponse.data?.parties || partiesResponse.data || [];
+    const numStores = Array.isArray(partiesData) ? partiesData.length : 0;
 
     setOverviewData({
       totalOrders,

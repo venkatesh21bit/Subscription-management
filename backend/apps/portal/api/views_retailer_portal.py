@@ -55,27 +55,22 @@ class RetailerProductListView(APIView):
         """List products from connected companies."""
         user = request.user
         
-        # Get retailer profile
-        try:
-            retailer = RetailerUser.objects.get(user=user)
-        except RetailerUser.DoesNotExist:
+        # Get retailer profiles (user may have multiple, one per company)
+        retailers = RetailerUser.objects.filter(user=user)
+        if not retailers.exists():
             return Response(
                 {"error": "Retailer profile not found. Please complete your profile first."},
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Get approved company connections
+        # Get approved company connections across all retailer profiles
         connections = RetailerCompanyAccess.objects.filter(
-            retailer=retailer,
+            retailer__in=retailers,
             status='APPROVED'
         ).select_related('company').values_list('company_id', flat=True)
         
         if not connections:
-            return Response(
-                {"message": "No company connections found. Please connect to a company first."},
-                status=status.HTTP_200_OK,
-                data=[]
-            )
+            return Response([], status=status.HTTP_200_OK)
         
         # Filter by company if specified
         company_id = request.query_params.get('company_id')
@@ -178,15 +173,14 @@ class RetailerCategoryListView(APIView):
         """List categories from connected companies."""
         user = request.user
         
-        # Get retailer profile
-        try:
-            retailer = RetailerUser.objects.get(user=user)
-        except RetailerUser.DoesNotExist:
+        # Get retailer profiles (user may have multiple, one per company)
+        retailers = RetailerUser.objects.filter(user=user)
+        if not retailers.exists():
             return Response([], status=status.HTTP_200_OK)
         
-        # Get approved connections
+        # Get approved connections across all retailer profiles
         connections = RetailerCompanyAccess.objects.filter(
-            retailer=retailer,
+            retailer__in=retailers,
             status='APPROVED'
         ).values_list('company_id', flat=True)
         
@@ -266,17 +260,16 @@ class RetailerPlaceOrderView(APIView):
         """Place order with company."""
         user = request.user
         
-        # Get retailer profile
-        try:
-            retailer = RetailerUser.objects.get(user=user)
-        except RetailerUser.DoesNotExist:
+        # Get retailer profile for the target company
+        company_id = request.data.get('company_id')
+        retailer = RetailerUser.objects.filter(user=user).first()
+        if not retailer:
             return Response(
                 {"error": "Retailer profile not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
         
         # Validate request data
-        company_id = request.data.get('company_id')
         items = request.data.get('items', [])
         
         if not company_id:
@@ -461,19 +454,19 @@ class RetailerOrderListView(APIView):
         """List retailer's orders."""
         user = request.user
         
-        # Get retailer profile
-        try:
-            retailer = RetailerUser.objects.get(user=user)
-            party = retailer.party
-        except RetailerUser.DoesNotExist:
+        # Get retailer profiles and collect all linked parties
+        retailers = RetailerUser.objects.filter(user=user).select_related('party')
+        if not retailers.exists():
             return Response([], status=status.HTTP_200_OK)
         
-        if not party:
+        # Collect all party IDs from retailer profiles
+        party_ids = [r.party_id for r in retailers if r.party_id]
+        if not party_ids:
             return Response([], status=status.HTTP_200_OK)
         
-        # Get orders
+        # Get orders for all parties
         orders = SalesOrder.objects.filter(
-            customer=party
+            customer_id__in=party_ids
         ).select_related('company', 'currency').prefetch_related(
             'items'
         ).order_by('-order_date', '-created_at')
