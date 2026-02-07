@@ -191,14 +191,48 @@ class ProductListCreateView(APIView):
         if is_featured is not None:
             qs = qs.filter(is_featured=is_featured.lower() == 'true')
         
-        # Limit
-        limit = min(int(request.query_params.get('limit', 100)), 500)
-        qs = qs[:limit]
+        # Additional filters
+        product_type = request.query_params.get('product_type')
+        if product_type:
+            qs = qs.filter(product_type=product_type)
         
-        serializer = ProductListSerializer(qs, many=True)
+        assigned_user = request.query_params.get('assigned_user')
+        if assigned_user:
+            qs = qs.filter(assigned_user_id=assigned_user)
+        
+        # Order by name
+        qs = qs.order_by('name')
+        
+        # Pagination
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', request.query_params.get('limit', 100)))
+        page_size = min(page_size, 500)  # Max 500 items per page
+        
+        # Get total count before slicing
+        total_count = qs.count()
+        
+        # Apply pagination
+        start = (page - 1) * page_size
+        end = start + page_size
+        products_page = qs[start:end]
+        
+        # Sync stock quantities from inventory system
+        for product in products_page:
+            try:
+                product.update_stock_from_items()
+            except Exception:
+                # Continue even if sync fails for some products
+                pass
+        
+        serializer = ProductListSerializer(products_page, many=True)
         return Response({
             'products': serializer.data,
-            'count': len(serializer.data)
+            'results': serializer.data,  # Alternative key for compatibility
+            'count': total_count,
+            'total': total_count,  # Alternative key for compatibility
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total_count + page_size - 1) // page_size
         })
     
     def post(self, request):
@@ -216,6 +250,11 @@ class ProductListCreateView(APIView):
         )
         if serializer.is_valid():
             product = serializer.save()
+            # Sync stock from inventory system
+            try:
+                product.update_stock_from_items()
+            except Exception:
+                pass
             # Return detailed view
             detail_serializer = ProductDetailSerializer(product)
             return Response(detail_serializer.data, status=status.HTTP_201_CREATED)
@@ -256,6 +295,12 @@ class ProductDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
+        # Sync stock quantity from inventory system
+        try:
+            product.update_stock_from_items()
+        except Exception:
+            pass  # Continue even if sync fails
+        
         serializer = ProductDetailSerializer(product)
         return Response(serializer.data)
     
@@ -275,6 +320,11 @@ class ProductDetailView(APIView):
         )
         if serializer.is_valid():
             serializer.save()
+            # Sync stock before returning
+            try:
+                product.update_stock_from_items()
+            except Exception:
+                pass
             # Return detailed view
             detail_serializer = ProductDetailSerializer(product)
             return Response(detail_serializer.data)
@@ -297,6 +347,11 @@ class ProductDetailView(APIView):
         )
         if serializer.is_valid():
             serializer.save()
+            # Sync stock before returning
+            try:
+                product.update_stock_from_items()
+            except Exception:
+                pass
             # Return detailed view
             detail_serializer = ProductDetailSerializer(product)
             return Response(detail_serializer.data)
