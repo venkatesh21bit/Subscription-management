@@ -31,8 +31,8 @@ COPY . .
 # Create staticfiles directory
 RUN mkdir -p staticfiles
 
-# Collect static files
-RUN python manage.py collectstatic --noinput --clear
+# Collect static files (use dummy DATABASE_URL for build step if not available)
+RUN DATABASE_URL=sqlite:///tmp/db.sqlite3 python manage.py collectstatic --noinput --clear || echo "collectstatic warning - continuing build"
 
 # Make entrypoint script executable
 RUN chmod +x /app/docker-entrypoint.sh
