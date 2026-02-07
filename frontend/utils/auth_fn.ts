@@ -1,7 +1,7 @@
 
 import { authStorage } from './localStorage';
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://backend-production-8d38.up.railway.app/api";
 
 /**
  * Authentication and Password Reset Utilities
@@ -199,5 +199,8 @@ const resendOTP = async (username: string): Promise<ResendOTPResponse> => {
     return { error: 'Network error occurred. Please check your connection and try again.' };
   }
 };
+
+// Export AUTH_BASE_URL (without /api suffix) for auth endpoints
+export const AUTH_BASE_URL = API_URL.replace('/api', '');
 
 export { API_URL, getAuthToken, refreshAccessToken, fetchWithAuth, forgotPassword, verifyOTP, resetPassword, resendOTP };

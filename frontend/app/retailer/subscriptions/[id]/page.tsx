@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { RetailerNavbar } from '@/components/retailer/nav_bar';
 import { getSessionData } from '@/utils/session';
+import { API_URL } from '@/utils/auth_fn';
 import { ArrowLeft, Calendar, FileText, Package, Check, X, Clock, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -82,7 +83,7 @@ export default function RetailerSubscriptionDetailPage() {
     try {
       setLoading(true);
       const response = await fetch(
-        `http://127.0.0.1:8000/api/subscriptions/quotations/${quotationId}/`,
+        `${API_URL}/subscriptions/quotations/${quotationId}/`,
         {
           headers: {
             'Authorization': `Bearer ${sessionData?.access}`,
@@ -111,7 +112,7 @@ export default function RetailerSubscriptionDetailPage() {
     try {
       setProcessing(true);
       const response = await fetch(
-        `http://127.0.0.1:8000/api/subscriptions/quotations/${quotation.id}/accept/`,
+        `${API_URL}/subscriptions/quotations/${quotation.id}/accept/`,
         {
           method: 'POST',
           headers: {
@@ -143,7 +144,7 @@ export default function RetailerSubscriptionDetailPage() {
     try {
       setProcessing(true);
       const response = await fetch(
-        `http://127.0.0.1:8000/api/subscriptions/quotations/${quotation.id}/reject/`,
+        `${API_URL}/subscriptions/quotations/${quotation.id}/reject/`,
         {
           method: 'POST',
           headers: {

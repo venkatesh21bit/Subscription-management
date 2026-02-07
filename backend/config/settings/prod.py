@@ -8,6 +8,7 @@ from .base import *
 DEBUG = False
 
 ALLOWED_HOSTS = [
+    'backend-production-8d38.up.railway.app',
     'vendor-backend-production-2053.up.railway.app',
     # Add your production domains here
 ]
@@ -24,10 +25,13 @@ DATABASES = {
 # CORS Configuration for production
 CORS_ALLOWED_ORIGINS = [
     "https://vendor-frontend-production-be99.up.railway.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
     # Add your production frontend URLs here
 ]
 
 CSRF_TRUSTED_ORIGINS = [
+    "https://backend-production-8d38.up.railway.app",
     "https://vendor-backend-production-2053.up.railway.app",
     "https://vendor-frontend-production-be99.up.railway.app",
 ]

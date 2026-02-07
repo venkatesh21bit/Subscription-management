@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getSessionData } from '@/utils/session';
+import { API_URL } from '@/utils/auth_fn';
 import { Calendar, FileText, Filter, Search, Eye } from 'lucide-react';
 import Link from 'next/link';
 
@@ -68,7 +69,7 @@ export default function BillsPage() {
   const fetchBills = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://127.0.0.1:8000/api/invoices/', {
+      const response = await fetch(`${API_URL}/invoices/`, {
         headers: {
           'Authorization': `Bearer ${sessionData?.access}`,
           'Content-Type': 'application/json',

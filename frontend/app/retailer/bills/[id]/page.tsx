@@ -96,7 +96,7 @@ export default function RetailerBillDetailPage() {
   const fetchBillDetail = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`http://127.0.0.1:8000/api/invoices/${billId}/`, {
+      const response = await fetch(`${API_URL}/invoices/${billId}/`, {
         headers: {
           'Authorization': `Bearer ${sessionData?.access}`,
           'Content-Type': 'application/json',

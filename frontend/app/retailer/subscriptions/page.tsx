@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RetailerNavbar } from '@/components/retailer/nav_bar';
 import { getSessionData } from '@/utils/session';
+import { API_URL } from '@/utils/auth_fn';
 import { Calendar, FileText, Search, Eye, Check, X, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -62,7 +63,7 @@ export default function RetailerSubscriptionsPage() {
   const fetchQuotations = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://127.0.0.1:8000/api/subscriptions/quotations/', {
+      const response = await fetch(`${API_URL}/subscriptions/quotations/`, {
         headers: {
           'Authorization': `Bearer ${sessionData?.access}`,
           'Content-Type': 'application/json',
@@ -87,7 +88,7 @@ export default function RetailerSubscriptionsPage() {
     try {
       setProcessingId(quotationId);
       const response = await fetch(
-        `http://127.0.0.1:8000/api/subscriptions/quotations/${quotationId}/accept/`,
+        `${API_URL}/subscriptions/quotations/${quotationId}/accept/`,
         {
           method: 'POST',
           headers: {
@@ -117,7 +118,7 @@ export default function RetailerSubscriptionsPage() {
     try {
       setProcessingId(quotationId);
       const response = await fetch(
-        `http://127.0.0.1:8000/api/subscriptions/quotations/${quotationId}/reject/`,
+        `${API_URL}/subscriptions/quotations/${quotationId}/reject/`,
         {
           method: 'POST',
           headers: {

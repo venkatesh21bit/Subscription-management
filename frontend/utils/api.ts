@@ -3,7 +3,7 @@
  * Use this for all authenticated API calls in the application
  */
 
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://backend-production-8d38.up.railway.app/api";
 
 interface ApiResponse<T = unknown> {
   data: T | null;
@@ -28,7 +28,8 @@ async function refreshAccessToken(): Promise<string | null> {
 
   try {
     // Auth endpoints are at root level, not under /api
-    const response = await fetch(`http://127.0.0.1:8000/auth/token/refresh/`, {
+    const AUTH_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || "https://backend-production-8d38.up.railway.app";
+    const response = await fetch(`${AUTH_BASE_URL}/auth/token/refresh/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

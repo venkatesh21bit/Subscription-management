@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RetailerNavbar } from '@/components/retailer/nav_bar';
 import { getSessionData } from '@/utils/session';
+import { API_URL } from '@/utils/auth_fn';
 import { Calendar, FileText, Filter, Search, Eye } from 'lucide-react';
 import Link from 'next/link';
 
@@ -70,7 +71,7 @@ export default function RetailerBillsPage() {
     try {
       setLoading(true);
       // For retailers, we might want to fetch bills where they are the customer
-      const response = await fetch('http://127.0.0.1:8000/api/invoices/', {
+      const response = await fetch(`${API_URL}/invoices/`, {
         headers: {
           'Authorization': `Bearer ${sessionData?.access}`,
           'Content-Type': 'application/json',
