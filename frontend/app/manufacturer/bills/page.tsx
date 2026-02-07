@@ -81,7 +81,24 @@ export default function BillsPage() {
       }
 
       const data = await response.json();
-      setBills(Array.isArray(data) ? data : data.results || []);
+      const items = Array.isArray(data) ? data : data.results || [];
+      // Map flat API fields to nested objects the template expects
+      const mapped = items.map((item: any) => ({
+        ...item,
+        party: {
+          id: item.party || '',
+          name: item.party_name || '',
+          email: item.party_email || '',
+        },
+        currency: {
+          code: item.currency_code || 'USD',
+          symbol: item.currency_symbol || '$',
+        },
+        total_amount: item.total_amount ?? item.grand_total ?? 0,
+        paid_amount: item.paid_amount ?? item.amount_received ?? 0,
+        outstanding_amount: item.outstanding_amount ?? 0,
+      }));
+      setBills(mapped);
     } catch (err) {
       console.error('Error fetching bills:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch bills');

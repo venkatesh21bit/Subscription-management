@@ -226,6 +226,113 @@ export default function RetailerBillDetailPage() {
     return status !== 'PAID' && status !== 'CANCELLED' && new Date(dueDate) < new Date();
   };
 
+  const handlePrintInvoice = () => {
+    if (!bill) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    const sym = bill.currency_symbol || '$';
+    const code = bill.currency_code || 'USD';
+    const fmtAmt = (n: number) => `${sym}${n.toFixed(2)} ${code}`;
+    const fmtDt = (d: string | undefined | null) => d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
+    const linesHtml = (bill.lines || []).map(l => `
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${l.product?.name || l.item_name || 'Service'}${l.description ? '<br/><small style="color:#6b7280">' + l.description + '</small>' : ''}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">${l.quantity}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">${fmtAmt(l.unit_price ?? l.unit_rate ?? 0)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600">${fmtAmt(l.total ?? l.line_total ?? 0)}</td>
+      </tr>
+    `).join('');
+    const paymentsHtml = (bill.payments || []).map(p => `
+      <tr>
+        <td style="padding:6px;border-bottom:1px solid #e5e7eb;font-size:13px">${fmtDt(p.payment_date)}</td>
+        <td style="padding:6px;border-bottom:1px solid #e5e7eb;font-size:13px">${p.payment_method}</td>
+        <td style="padding:6px;border-bottom:1px solid #e5e7eb;font-size:13px">${p.reference_number || '\u2014'}</td>
+        <td style="padding:6px;border-bottom:1px solid #e5e7eb;text-align:right;font-size:13px;color:#059669;font-weight:600">${fmtAmt(p.amount)}</td>
+      </tr>
+    `).join('');
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html><head><title>Invoice ${bill.invoice_number}</title>
+      <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 40px; color: #1f2937; }
+        .invoice-box { max-width: 800px; margin: auto; border: 1px solid #e5e7eb; padding: 40px; }
+        .header { display: flex; justify-content: space-between; margin-bottom: 30px; }
+        .title { font-size: 28px; font-weight: 700; color: #1e40af; }
+        .badge { display: inline-block; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; }
+        .bg-blue { background: #dbeafe; color: #1e40af; }
+        .bg-green { background: #d1fae5; color: #065f46; }
+        .section { margin-bottom: 24px; }
+        .section-title { font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; margin-bottom: 8px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .info-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
+        .info-label { color: #6b7280; }
+        .info-value { font-weight: 500; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 8px; border-bottom: 2px solid #d1d5db; font-size: 14px; color: #374151; }
+        .text-right { text-align: right; }
+        .totals { margin-top: 16px; }
+        .total-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
+        .total-grand { font-size: 18px; font-weight: 700; border-top: 2px solid #1e40af; padding-top: 8px; margin-top: 8px; }
+        .outstanding { color: #dc2626; }
+        .paid { color: #059669; }
+        .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; text-align: center; }
+        @media print { body { padding: 20px; } .invoice-box { border: none; padding: 0; } }
+      </style></head><body>
+      <div class="invoice-box">
+        <div class="header">
+          <div>
+            <div class="title">INVOICE</div>
+            <div style="font-size:20px;font-weight:600;margin-top:4px">${bill.invoice_number}</div>
+          </div>
+          <div style="text-align:right">
+            <span class="badge bg-blue">${bill.status.replace('_', ' ')}</span>
+          </div>
+        </div>
+        <div class="grid section">
+          <div>
+            <div class="section-title">From</div>
+            <div style="font-weight:600;font-size:16px">${bill.party_name || 'N/A'}</div>
+            <div style="color:#6b7280;font-size:14px">${bill.party_email || ''}</div>
+          </div>
+          <div>
+            <div class="section-title">Invoice Details</div>
+            <div class="info-row"><span class="info-label">Date:</span><span class="info-value">${fmtDt(bill.invoice_date)}</span></div>
+            <div class="info-row"><span class="info-label">Due Date:</span><span class="info-value">${fmtDt(bill.due_date)}</span></div>
+            ${bill.billing_period_start ? '<div class="info-row"><span class="info-label">Period:</span><span class="info-value">' + fmtDt(bill.billing_period_start) + ' \u2013 ' + fmtDt(bill.billing_period_end) + '</span></div>' : ''}
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Items</div>
+          <table>
+            <thead><tr>
+              <th>Description</th>
+              <th class="text-right">Qty</th>
+              <th class="text-right">Unit Price</th>
+              <th class="text-right">Total</th>
+            </tr></thead>
+            <tbody>${linesHtml || '<tr><td colspan="4" style="padding:16px;text-align:center;color:#9ca3af">No line items</td></tr>'}</tbody>
+          </table>
+        </div>
+        <div style="display:flex;justify-content:flex-end">
+          <div style="width:300px" class="totals">
+            ${bill.subtotal > 0 ? '<div class="total-row"><span>Subtotal</span><span>' + fmtAmt(bill.subtotal) + '</span></div>' : ''}
+            ${bill.discount_amount > 0 ? '<div class="total-row paid"><span>Discount</span><span>-' + fmtAmt(bill.discount_amount) + '</span></div>' : ''}
+            ${bill.tax_amount > 0 ? '<div class="total-row"><span>Tax</span><span>' + fmtAmt(bill.tax_amount) + '</span></div>' : ''}
+            <div class="total-row total-grand"><span>Total</span><span>${fmtAmt(bill.total_amount)}</span></div>
+            ${bill.paid_amount > 0 ? '<div class="total-row paid"><span>Paid</span><span>' + fmtAmt(bill.paid_amount) + '</span></div>' : ''}
+            ${bill.outstanding_amount > 0 ? '<div class="total-row outstanding" style="font-weight:700"><span>Outstanding</span><span>' + fmtAmt(bill.outstanding_amount) + '</span></div>' : ''}
+          </div>
+        </div>
+        ${paymentsHtml ? '<div class="section" style="margin-top:24px"><div class="section-title">Payment History</div><table><thead><tr><th>Date</th><th>Method</th><th>Reference</th><th class="text-right">Amount</th></tr></thead><tbody>' + paymentsHtml + '</tbody></table></div>' : ''}
+        ${bill.notes ? '<div class="section" style="margin-top:24px"><div class="section-title">Notes</div><p style="font-size:14px;color:#4b5563">' + bill.notes + '</p></div>' : ''}
+        ${bill.terms_and_conditions ? '<div class="section"><div class="section-title">Terms & Conditions</div><p style="font-size:14px;color:#4b5563">' + bill.terms_and_conditions + '</p></div>' : ''}
+        <div class="footer">Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+      </div></body></html>
+    `);
+    printWindow.document.close();
+    setTimeout(() => { printWindow.print(); }, 500);
+  };
+
   if (loading) {
     return (
       <div>
@@ -276,10 +383,10 @@ export default function RetailerBillDetailPage() {
             </div>
           </div>
           <div className="flex space-x-2">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={() => handlePrintInvoice()}>
               <Download className="h-4 w-4 mr-2" /> Download PDF
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={() => handlePrintInvoice()}>
               <Printer className="h-4 w-4 mr-2" /> Print
             </Button>
           </div>
