@@ -8,16 +8,24 @@ export const NAVLINKS = [
   { title: "Subscriptions", href: "/manufacturer/subscriptions" },
   { title: "Dashboard", href: "/manufacturer" },
   { title: "Accounting", href: "/manufacturer/accounting" },
-  { title: "StockCount", href: "/manufacturer/stockCount" },
+  { title: "Products", href: "/manufacturer/products" },
   { title: "Connections", href: "/manufacturer/connections" },
   { title: "Company Code", href: "/manufacturer/company-code" },
   { title: "Profile", href: "/manufacturer/profile" },
-  { title: "Configuration", href: "/manufacturer/configuration" },
   { title: "Company", href: "/manufacturer/company" },
+];
+
+export const CONFIGURATION_LINKS = [
+  { title: "Discounts", href: "/manufacturer/configuration/discounts" },
+  { title: "Taxes", href: "/manufacturer/configuration/taxes" },
+  { title: "Attributes", href: "/manufacturer/configuration/attributes" },
+  { title: "Recurring Plans", href: "/manufacturer/configuration/recurring-plans" },
+  { title: "Quotation Templates", href: "/manufacturer/configuration/quotation-templates" },
 ];
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
   const router = useRouter();
 
   const handleLogout = () => {
@@ -98,6 +106,39 @@ export function Navbar() {
                     {item.title}
                   </Anchor>
                 ))}
+                {/* Configuration dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setConfigOpen(!configOpen)}
+                    className="rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                  >
+                    Configuration
+                    <svg
+                      className={`inline-block ml-1 h-4 w-4 transition-transform ${configOpen ? "rotate-180" : ""}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {configOpen && (
+                    <div className="absolute left-0 mt-2 w-56 rounded-md shadow-lg bg-gray-800 ring-1 ring-black ring-opacity-5 z-50">
+                      <div className="py-1">
+                        {CONFIGURATION_LINKS.map((item) => (
+                          <Link
+                            key={item.title}
+                            href={item.href}
+                            onClick={() => setConfigOpen(false)}
+                            className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                          >
+                            {item.title}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -106,6 +147,7 @@ export function Navbar() {
             <button
               onClick={handleLogout}
               className="rounded bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+              suppressHydrationWarning
             >
               Log out
             </button>
@@ -125,6 +167,36 @@ export function Navbar() {
               {item.title}
             </Anchor>
           ))}
+          {/* Configuration section */}
+          <div>
+            <button
+              onClick={() => setConfigOpen(!configOpen)}
+              className="w-full text-left rounded-md px-3 py-2 text-base font-medium text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+            >
+              Configuration
+              <svg
+                className={`inline-block ml-1 h-4 w-4 transition-transform ${configOpen ? "rotate-180" : ""}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {configOpen && (
+              <div className="pl-4 space-y-1">
+                {CONFIGURATION_LINKS.map((item) => (
+                  <Link
+                    key={item.title}
+                    href={item.href}
+                    className="block rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                  >
+                    {item.title}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </nav>

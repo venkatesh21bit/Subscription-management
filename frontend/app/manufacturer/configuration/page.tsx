@@ -1,143 +1,73 @@
 "use client";
-import React, { useState } from "react";
-import { apiClient } from "@/utils/api";
+import React from "react";
+import Link from "next/link";
+import { Settings, Tag, Receipt, Clock, FileText, Grid3x3 } from "lucide-react";
 
-const ConfigurationPage = () => {
-  const [activeApp, setActiveApp] = useState("odoo"); // Default active app is Odoo
-  const [formData, setFormData] = useState({
-    db: "",
-    username: "",
-    password: "",
-  });
-  const [message, setMessage] = useState("");
+const CONFIGURATION_OPTIONS = [
+  {
+    title: "Discounts",
+    description: "Manage discount rules and promotions",
+    href: "/manufacturer/configuration/discounts",
+    icon: Tag,
+  },
+  {
+    title: "Taxes",
+    description: "Configure tax rates and computations",
+    href: "/manufacturer/configuration/taxes",
+    icon: Receipt,
+  },
+  {
+    title: "Attributes",
+    description: "Define product attributes and values",
+    href: "/manufacturer/configuration/attributes",
+    icon: Grid3x3,
+  },
+  {
+    title: "Recurring Plans",
+    description: "Set up subscription and recurring billing plans",
+    href: "/manufacturer/configuration/recurring-plans",
+    icon: Clock,
+  },
+  {
+    title: "Quotation Templates",
+    description: "Create and manage quotation templates",
+    href: "/manufacturer/configuration/quotation-templates",
+    icon: FileText,
+  },
+];
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (activeApp !== "odoo") {
-      setMessage("Only Odoo is currently active.");
-      return;
-    }
-
-    try {
-      const response = await apiClient.post("/odoo/save-credentials/", formData);
-
-      if (!response.error) {
-        setMessage("Credentials saved successfully!");
-        setFormData({ db: "", username: "", password: "" }); // Reset form
-      } else {
-        setMessage(response.error || "Failed to save credentials.");
-      }
-    } catch (error) {
-      setMessage("An error occurred while saving credentials.");
-    }
-  };
-
+export default function ConfigurationPage() {
   return (
-    <>
-      <div className="min-h-screen bg-black text-white">
-        {/* Header */}
-        <header className="p-4 border-b border-gray-800">
-          <div className="flex items-center justify-between max-w-[1600px] mx-auto">
-            <div className="text-xl font-bold">Third-Party App Configuration</div>
-          </div>
-        </header>
+    <div className="min-h-screen bg-gray-900 text-white p-6">
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">Configuration</h1>
+          <p className="text-gray-400">Manage your system settings and configurations</p>
+        </div>
 
-        {/* Navbar */}
-        <nav className="p-4 border-b border-gray-800">
-          <div className="flex space-x-4 max-w-[1600px] mx-auto">
-            <button
-              className={`px-4 py-2 rounded-lg ${
-                activeApp === "odoo" ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400"
-              }`}
-              onClick={() => setActiveApp("odoo")}
-            >
-              Odoo
-            </button>
-            <button
-              className="px-4 py-2 rounded-lg bg-gray-800 text-gray-400 cursor-not-allowed"
-              onClick={() => setActiveApp("tally")}
-            >
-              Tally Prime (Coming Soon)
-            </button>
-            <button
-              className="px-4 py-2 rounded-lg bg-gray-800 text-gray-400 cursor-not-allowed"
-              onClick={() => setActiveApp("zoho")}
-            >
-              Zoho Books (Coming Soon)
-            </button>
-          </div>
-        </nav>
-
-        {/* Main Content */}
-        <main className="p-8 max-w-[1600px] mx-auto">
-          <h2 className="text-xl font-bold mb-4">Configure {activeApp === "odoo" ? "Odoo" : "Third-Party App"}</h2>
-          <div className="bg-gray-900 p-6 rounded-lg">
-            {activeApp === "odoo" ? (
-              <form onSubmit={handleSubmit}>
-                <div className="mb-4">
-                  <label htmlFor="db" className="block text-gray-400 mb-2">
-                    Database Name
-                  </label>
-                  <input
-                    type="text"
-                    id="db"
-                    name="db"
-                    value={formData.db}
-                    onChange={handleInputChange}
-                    className="w-full p-2 bg-gray-800 text-white rounded-lg"
-                    required
-                  />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {CONFIGURATION_OPTIONS.map((option) => {
+            const Icon = option.icon;
+            return (
+              <Link
+                key={option.title}
+                href={option.href}
+                className="bg-gray-800 rounded-lg p-6 hover:bg-gray-700 transition-colors border border-gray-700 hover:border-pink-600"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="bg-pink-600 rounded-lg p-3">
+                    <Icon className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold mb-1">{option.title}</h3>
+                    <p className="text-sm text-gray-400">{option.description}</p>
+                  </div>
                 </div>
-                <div className="mb-4">
-                  <label htmlFor="username" className="block text-gray-400 mb-2">
-                    Username (Email)
-                  </label>
-                  <input
-                    type="email"
-                    id="username"
-                    name="username"
-                    value={formData.username}
-                    onChange={handleInputChange}
-                    className="w-full p-2 bg-gray-800 text-white rounded-lg"
-                    required
-                  />
-                </div>
-                <div className="mb-4">
-                  <label htmlFor="password" className="block text-gray-400 mb-2">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    className="w-full p-2 bg-gray-800 text-white rounded-lg"
-                    required
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Save Credentials
-                </button>
-              </form>
-            ) : (
-              <p className="text-gray-400">Only Odoo is currently active. Please select Odoo to configure.</p>
-            )}
-            {message && <p className="mt-4 text-green-500">{message}</p>}
-          </div>
-        </main>
+              </Link>
+            );
+          })}
+        </div>
       </div>
-    </>
+    </div>
   );
-};
-
-export default ConfigurationPage;
+}

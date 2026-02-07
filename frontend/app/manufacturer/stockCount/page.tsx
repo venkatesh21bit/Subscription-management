@@ -75,7 +75,7 @@ export default function StockCountPage() {
   cess_rate: "0",
   status: "available",
 });
-  
+
   // Category Modal State
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ name: ""});
