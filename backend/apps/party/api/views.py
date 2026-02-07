@@ -173,8 +173,13 @@ class PartyListView(APIView):
     permission_classes = [IsAuthenticated, HasCompanyContext]
     
     def get(self, request):
-        """List parties."""
-        qs = Party.objects.filter(company=request.company)
+        """List parties, auto-syncing approved retailers that lack a Party record."""
+        company = request.company
+        
+        # Auto-create Party records for approved retailers that don't have one
+        self._sync_retailer_parties(company)
+        
+        qs = Party.objects.filter(company=company)
         
         # Apply filters
         party_type = request.query_params.get('party_type')
@@ -204,3 +209,37 @@ class PartyListView(APIView):
         ]
         
         return Response({'parties': parties}, status=status.HTTP_200_OK)
+
+    def _sync_retailer_parties(self, company):
+        """Create Party records for approved retailers missing one."""
+        from apps.party.models import RetailerUser
+        
+        # Find approved retailers in this company without a party
+        retailers_without_party = RetailerUser.objects.filter(
+            company=company,
+            status='APPROVED',
+            party__isnull=True
+        ).select_related('user')
+        
+        for retailer in retailers_without_party:
+            user = retailer.user
+            # Check if a party already exists for this email
+            existing_party = Party.objects.filter(
+                company=company,
+                email=user.email
+            ).first()
+            
+            if existing_party:
+                retailer.party = existing_party
+                retailer.save(update_fields=['party'])
+            else:
+                party = Party.objects.create(
+                    company=company,
+                    name=user.get_full_name() or user.email,
+                    party_type='CUSTOMER',
+                    email=user.email,
+                    phone=user.phone or '',
+                    is_retailer=True
+                )
+                retailer.party = party
+                retailer.save(update_fields=['party'])

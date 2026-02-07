@@ -387,8 +387,10 @@ class RetailerApproveView(APIView):
                 )
             
             # Link to party if provided or create new
+            # Default to creating a party so the retailer always appears
+            # in customer dropdowns (subscriptions, etc.)
             party_id = request.data.get('party_id')
-            create_party = request.data.get('create_party', False)
+            create_party = request.data.get('create_party', True)
             
             if party_id:
                 # Link to existing party
