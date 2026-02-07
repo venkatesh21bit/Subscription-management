@@ -2,15 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import { fetchWithAuth, API_URL } from '../../../utils/auth_fn';
 import { Navbar } from '../../../components/manufacturer/nav_bar';
-import { 
-  Users, 
-  Plus, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  UserCheck, 
-  UserX, 
-  Copy, 
+import {
+  Users,
+  Plus,
+  Clock,
+  CheckCircle,
+  XCircle,
+  UserCheck,
+  UserX,
+  Copy,
   Send,
   AlertCircle,
   Mail,
@@ -84,30 +84,30 @@ interface Invitation {
 
 const ConnectionsPage = () => {
   const [activeTab, setActiveTab] = useState<'requests' | 'connections' | 'invites'>('requests');
-  
+
   // Requests
   const [requests, setRequests] = useState<RetailerRequest[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
-  
+
   // Connections
   const [connections, setConnections] = useState<Connection[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(false);
-  
+
   // Invitations
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [invitationsLoading, setInvitationsLoading] = useState(false);
-  
+
   // Modals
   const [showGenerateInviteModal, setShowGenerateInviteModal] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<RetailerRequest | null>(null);
-  
+
   // Forms
   const [inviteMessage, setInviteMessage] = useState('');
   const [inviteExpireDays, setInviteExpireDays] = useState(7);
   const [creditLimit, setCreditLimit] = useState('');
   const [paymentTerms, setPaymentTerms] = useState('Net 30 days');
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -134,11 +134,11 @@ const ConnectionsPage = () => {
         setRequests(retailers.map((r: any) => ({
           id: r.id,
           retailer: {
-            id: r.user_id || r.id,
-            username: r.user_email || r.email || '',
-            email: r.user_email || r.email || '',
-            first_name: r.user_name?.split(' ')[0] || '',
-            last_name: r.user_name?.split(' ').slice(1).join(' ') || '',
+            id: r.user?.id || r.user_id || r.id,
+            username: r.user?.email || r.user_email || r.email || '',
+            email: r.user?.email || r.user_email || r.email || '',
+            first_name: r.user?.full_name?.split(' ')[0] || r.user_name?.split(' ')[0] || '',
+            last_name: r.user?.full_name?.split(' ').slice(1).join(' ') || r.user_name?.split(' ').slice(1).join(' ') || '',
           },
           company: {
             id: r.party_id || '',
@@ -176,11 +176,11 @@ const ConnectionsPage = () => {
             address: r.address || '',
           },
           retailer: {
-            id: r.user_id || r.id,
-            username: r.user_email || r.email || '',
-            email: r.user_email || r.email || '',
-            first_name: r.user_name?.split(' ')[0] || '',
-            last_name: r.user_name?.split(' ').slice(1).join(' ') || '',
+            id: r.user?.id || r.user_id || r.id,
+            username: r.user?.email || r.user_email || r.email || '',
+            email: r.user?.email || r.user_email || r.email || '',
+            first_name: r.user?.full_name?.split(' ')[0] || r.user_name?.split(' ')[0] || '',
+            last_name: r.user?.full_name?.split(' ').slice(1).join(' ') || r.user_name?.split(' ').slice(1).join(' ') || '',
           },
           status: (r.status || 'APPROVED').toLowerCase(),
           connected_at: r.created_at || new Date().toISOString(),
@@ -237,11 +237,11 @@ const ConnectionsPage = () => {
     setLoading(true);
     setError('');
     setSuccess('');
-    
+
     try {
       // Use company/connection/generate-code endpoint
       const response = await fetchWithAuth(`${API_URL}/company/connection/generate-code/`);
-      
+
       if (response.ok) {
         const data = await response.json();
         setSuccess(`Company code: ${data.company_code} - Share this with retailers!`);
@@ -249,7 +249,7 @@ const ConnectionsPage = () => {
         setInviteMessage('');
         setInviteExpireDays(7);
         fetchInvitations();
-        
+
         // Copy to clipboard
         navigator.clipboard.writeText(data.company_code);
       } else {
@@ -267,25 +267,25 @@ const ConnectionsPage = () => {
     setLoading(true);
     setError('');
     setSuccess('');
-    
+
     try {
       // Use portal/retailers/<id>/approve or /reject endpoint
-      const endpoint = action === 'approve' 
+      const endpoint = action === 'approve'
         ? `${API_URL}/portal/retailers/${requestId}/approve/`
         : `${API_URL}/portal/retailers/${requestId}/reject/`;
-      
+
       const payload: any = {};
       if (action === 'approve') {
         payload.credit_limit = parseFloat(creditLimit) || 0;
         payload.payment_terms = paymentTerms;
       }
-      
+
       const response = await fetchWithAuth(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setSuccess(data.message || `Successfully ${action}d retailer`);
@@ -316,7 +316,7 @@ const ConnectionsPage = () => {
           status
         }),
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setSuccess(data.message);
@@ -349,8 +349,8 @@ const ConnectionsPage = () => {
 
   return (
     <div className="min-h-screen bg-neutral-950">
-     
-      
+
+
       <div className="container mx-auto p-6 space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
@@ -390,11 +390,10 @@ const ConnectionsPage = () => {
           <div className="flex border-b border-neutral-800">
             <button
               onClick={() => setActiveTab('requests')}
-              className={`px-6 py-3 text-sm font-medium rounded-tl-lg transition-colors ${
-                activeTab === 'requests'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-              }`}
+              className={`px-6 py-3 text-sm font-medium rounded-tl-lg transition-colors ${activeTab === 'requests'
+                ? 'bg-blue-600 text-white'
+                : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                }`}
             >
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4" />
@@ -403,11 +402,10 @@ const ConnectionsPage = () => {
             </button>
             <button
               onClick={() => setActiveTab('connections')}
-              className={`px-6 py-3 text-sm font-medium transition-colors ${
-                activeTab === 'connections'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-              }`}
+              className={`px-6 py-3 text-sm font-medium transition-colors ${activeTab === 'connections'
+                ? 'bg-blue-600 text-white'
+                : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                }`}
             >
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
@@ -416,11 +414,10 @@ const ConnectionsPage = () => {
             </button>
             <button
               onClick={() => setActiveTab('invites')}
-              className={`px-6 py-3 text-sm font-medium rounded-tr-lg transition-colors ${
-                activeTab === 'invites'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-              }`}
+              className={`px-6 py-3 text-sm font-medium rounded-tr-lg transition-colors ${activeTab === 'invites'
+                ? 'bg-blue-600 text-white'
+                : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                }`}
             >
               <div className="flex items-center gap-2">
                 <Send className="h-4 w-4" />
@@ -509,11 +506,10 @@ const ConnectionsPage = () => {
                             <h3 className="font-semibold text-white">
                               {connection.retailer.first_name} {connection.retailer.last_name}
                             </h3>
-                            <span className={`px-2 py-1 text-xs rounded-full ${
-                              connection.status === 'approved' 
-                                ? 'bg-green-900/30 text-green-400' 
-                                : 'bg-red-900/30 text-red-400'
-                            }`}>
+                            <span className={`px-2 py-1 text-xs rounded-full ${connection.status === 'approved'
+                              ? 'bg-green-900/30 text-green-400'
+                              : 'bg-red-900/30 text-red-400'
+                              }`}>
                               {connection.status}
                             </span>
                           </div>
@@ -584,24 +580,23 @@ const ConnectionsPage = () => {
                             >
                               <Copy className="h-4 w-4" />
                             </button>
-                            <span className={`px-2 py-1 text-xs rounded-full ${
-                              invite.is_used 
-                                ? 'bg-green-900/30 text-green-400' 
-                                : 'bg-yellow-900/30 text-yellow-400'
-                            }`}>
+                            <span className={`px-2 py-1 text-xs rounded-full ${invite.is_used
+                              ? 'bg-green-900/30 text-green-400'
+                              : 'bg-yellow-900/30 text-yellow-400'
+                              }`}>
                               {invite.is_used ? 'Used' : 'Active'}
                             </span>
                           </div>
-                          
+
                           {invite.email && (
                             <div className="flex items-center gap-2 mb-2">
                               <Mail className="h-4 w-4 text-neutral-500" />
                               <p className="text-neutral-400 text-sm">{invite.email}</p>
                             </div>
                           )}
-                          
+
                           <p className="text-neutral-300 text-sm">{invite.message}</p>
-                          
+
                           <div className="flex items-center gap-4 mt-3 text-xs text-neutral-500">
                             <div className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
@@ -612,7 +607,7 @@ const ConnectionsPage = () => {
                               Expires {formatDate(invite.expires_at)}
                             </div>
                           </div>
-                          
+
                           {invite.used_by && (
                             <p className="text-green-400 text-sm mt-2">
                               Used by {invite.used_by.email} on {formatDate(invite.used_at!)}
@@ -656,7 +651,7 @@ const ConnectionsPage = () => {
                   className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-neutral-300 mb-1">
                   Expires in (days)
@@ -670,7 +665,7 @@ const ConnectionsPage = () => {
                   className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white"
                 />
               </div>
-              
+
               <button
                 onClick={generateInviteCode}
                 disabled={loading}
@@ -705,7 +700,7 @@ const ConnectionsPage = () => {
                 <p className="text-neutral-400 text-sm">{selectedRequest.retailer.email}</p>
                 <p className="text-neutral-300 text-sm mt-2">{selectedRequest.message}</p>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-neutral-300 mb-1">
                   Credit Limit ($)
@@ -719,7 +714,7 @@ const ConnectionsPage = () => {
                   className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-neutral-300 mb-1">
                   Payment Terms
@@ -732,7 +727,7 @@ const ConnectionsPage = () => {
                   className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white"
                 />
               </div>
-              
+
               <div className="flex gap-2">
                 <button
                   onClick={() => handleRequest(selectedRequest.id, 'approve')}

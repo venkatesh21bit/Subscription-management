@@ -208,18 +208,16 @@ class JoinByCompanyCodeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Create approved connection (auto-approve when joining by company code)
+        # Create pending connection request
         connection = RetailerCompanyAccess.objects.create(
             retailer=retailer,
             company=company,
-            status='APPROVED',
-            approved_by=None,  # Auto-approved via company code
-            approved_at=timezone.now(),
-            notes=f"Auto-approved via company code: {company_code}"
+            status='PENDING',
+            notes=f"Request to join via company code: {company_code}"
         )
         
         return Response({
-            "message": f"Successfully connected to {company.name}",
+            "message": f"Request sent to {company.name}. Please wait for approval.",
             "connection": {
                 "id": str(connection.id),
                 "company_id": str(company.id),
