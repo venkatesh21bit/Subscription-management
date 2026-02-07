@@ -199,21 +199,41 @@ class JoinByCompanyCodeView(APIView):
         ).first()
         
         if existing_access:
-            status_messages = {
-                'PENDING': 'You already have a pending request to this company. Please wait for approval.',
-                'APPROVED': 'You are already connected to this company.',
-                'BLOCKED': 'Your access to this company has been blocked. Please contact the manufacturer.',
-                'REJECTED': 'Your previous request was rejected. Please contact the manufacturer.'
-            }
-            error_msg = status_messages.get(existing_access.status, 'You are already connected to this company')
-            return Response(
-                {
-                    "error": error_msg,
-                    "status": existing_access.status,
-                    "connection_id": str(existing_access.id)
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            # If already approved or pending, don't allow duplicate request
+            if existing_access.status in ['APPROVED', 'PENDING']:
+                return Response(
+                    {
+                        "error": "You are already connected to this company" if existing_access.status == 'APPROVED' else "Your request is already pending",
+                        "status": existing_access.status,
+                        "connection_id": str(existing_access.id)
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            # If suspended, blocked or rejected, allow them to re-request
+            elif existing_access.status in ['SUSPENDED', 'BLOCKED', 'REJECTED']:
+                # Get optional message from request
+                message = request.data.get('message') or ''
+                message = message.strip() if message else ''
+                notes = message if message else f"Re-request to join via company code: {company_code}"
+                
+                # Reset the connection to pending
+                existing_access.status = 'PENDING'
+                existing_access.notes = notes
+                existing_access.approved_at = None
+                existing_access.approved_by = None
+                existing_access.save()
+                
+                return Response({
+                    "message": f"Request re-sent to {company.name}. Please wait for approval.",
+                    "connection": {
+                        "id": str(existing_access.id),
+                        "company_id": str(company.id),
+                        "company_name": company.name,
+                        "company_code": company.code,
+                        "status": existing_access.status,
+                        "connected_at": existing_access.created_at.isoformat()
+                    }
+                }, status=status.HTTP_200_OK)
         
         # Create pending connection request
         # Get optional message from request (handle None from JSON)
