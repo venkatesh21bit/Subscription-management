@@ -124,10 +124,11 @@ export default function BillsPage() {
     });
   };
 
-  const formatCurrency = (amount: number, currency: any) => {
+  const formatCurrency = (amount: number | string | undefined | null, currency: any) => {
     const symbol = currency?.symbol || '$';
     const code = currency?.code || 'USD';
-    return `${symbol}${amount.toFixed(2)} ${code}`;
+    const num = typeof amount === 'string' ? parseFloat(amount) : (amount || 0);
+    return `${symbol}${(num || 0).toFixed(2)} ${code}`;
   };
 
   const isOverdue = (dueDate: string, status: string) => {

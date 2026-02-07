@@ -117,8 +117,8 @@ export default function BillDetailPage() {
           name: line.item_name || 'Service',
           code: line.item_sku || '',
         },
-        unit_price: line.unit_price ?? line.unit_rate ?? 0,
-        total: line.total ?? line.line_total ?? 0,
+        unit_price: parseFloat(line.unit_price ?? line.unit_rate) || 0,
+        total: parseFloat(line.total ?? line.line_total) || 0,
       }));
 
       setBill({
@@ -135,9 +135,12 @@ export default function BillDetailPage() {
           symbol: data.currency_symbol || data.currency?.symbol || '$',
           name: data.currency_name || data.currency?.name || '',
         },
-        total_amount: data.total_amount ?? data.grand_total ?? 0,
-        paid_amount: data.paid_amount ?? data.amount_received ?? 0,
-        outstanding_amount: data.outstanding_amount ?? ((data.grand_total ?? 0) - (data.amount_received ?? 0)),
+        subtotal: parseFloat(data.subtotal) || 0,
+        tax_amount: parseFloat(data.tax_amount) || 0,
+        discount_amount: parseFloat(data.discount_amount) || 0,
+        total_amount: parseFloat(data.total_amount ?? data.grand_total) || 0,
+        paid_amount: parseFloat(data.paid_amount ?? data.amount_received) || 0,
+        outstanding_amount: parseFloat(data.outstanding_amount) || ((parseFloat(data.grand_total) || 0) - (parseFloat(data.amount_received) || 0)),
         payments: data.payments || [],
       });
     } catch (err) {
@@ -156,10 +159,11 @@ export default function BillDetailPage() {
     });
   };
 
-  const formatCurrency = (amount: number, currency: any) => {
+  const formatCurrency = (amount: number | string | undefined | null, currency: any) => {
     const symbol = currency?.symbol || '$';
     const code = currency?.code || 'USD';
-    return `${symbol}${amount.toFixed(2)} ${code}`;
+    const num = typeof amount === 'string' ? parseFloat(amount) : (amount || 0);
+    return `${symbol}${(num || 0).toFixed(2)} ${code}`;
   };
 
   const handlePrintInvoice = () => {

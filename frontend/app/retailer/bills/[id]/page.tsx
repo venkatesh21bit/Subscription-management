@@ -135,17 +135,22 @@ export default function RetailerBillDetailPage() {
           name: line.item_name || 'Service',
           code: line.item_sku || '',
         },
-        unit_price: line.unit_price ?? line.unit_rate ?? 0,
-        total: line.total ?? line.line_total ?? 0,
+        unit_price: parseFloat(line.unit_price ?? line.unit_rate) || 0,
+        total: parseFloat(line.total ?? line.line_total) || 0,
       }));
 
       setBill({
         ...data,
         lines,
         payments: data.payments || [],
-        total_amount: data.total_amount ?? data.grand_total ?? 0,
-        paid_amount: data.paid_amount ?? data.amount_received ?? 0,
-        outstanding_amount: data.outstanding_amount ?? ((data.grand_total ?? 0) - (data.amount_received ?? 0)),
+        subtotal: parseFloat(data.subtotal) || 0,
+        tax_amount: parseFloat(data.tax_amount) || 0,
+        discount_amount: parseFloat(data.discount_amount) || 0,
+        grand_total: parseFloat(data.grand_total) || 0,
+        amount_received: parseFloat(data.amount_received) || 0,
+        total_amount: parseFloat(data.total_amount ?? data.grand_total) || 0,
+        paid_amount: parseFloat(data.paid_amount ?? data.amount_received) || 0,
+        outstanding_amount: parseFloat(data.outstanding_amount) || ((parseFloat(data.grand_total) || 0) - (parseFloat(data.amount_received) || 0)),
         currency_symbol: data.currency_symbol || '$',
         currency_code: data.currency_code || 'USD',
         party_name: data.party_name || '',
@@ -210,9 +215,10 @@ export default function RetailerBillDetailPage() {
     }
   };
 
-  const fmt = (amount: number) => {
+  const fmt = (amount: number | string | undefined | null) => {
     const symbol = bill?.currency_symbol || '$';
-    return `${symbol}${amount.toFixed(2)}`;
+    const num = typeof amount === 'string' ? parseFloat(amount) : (amount || 0);
+    return `${symbol}${(num || 0).toFixed(2)}`;
   };
 
   const formatDate = (dateString: string | undefined | null) => {
