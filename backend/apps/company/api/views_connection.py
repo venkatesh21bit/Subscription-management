@@ -199,9 +199,16 @@ class JoinByCompanyCodeView(APIView):
         ).first()
         
         if existing_access:
+            status_messages = {
+                'PENDING': 'You already have a pending request to this company. Please wait for approval.',
+                'APPROVED': 'You are already connected to this company.',
+                'BLOCKED': 'Your access to this company has been blocked. Please contact the manufacturer.',
+                'REJECTED': 'Your previous request was rejected. Please contact the manufacturer.'
+            }
+            error_msg = status_messages.get(existing_access.status, 'You are already connected to this company')
             return Response(
                 {
-                    "error": "You are already connected to this company",
+                    "error": error_msg,
                     "status": existing_access.status,
                     "connection_id": str(existing_access.id)
                 },
