@@ -193,6 +193,24 @@ class RetailerProfileView(APIView):
                         profile_data['state'] = address.state
                         profile_data['country'] = address.country
                         profile_data['postal_code'] = address.pincode
+            
+            # Fallback: Also check RetailerCompanyAccess if company_name still empty
+            if not profile_data['company_name']:
+                from apps.portal.models import RetailerCompanyAccess
+                access = RetailerCompanyAccess.objects.filter(
+                    retailer__user=user,
+                    status='APPROVED'
+                ).select_related('company').first()
+                
+                if not access:
+                    # Try any access request
+                    access = RetailerCompanyAccess.objects.filter(
+                        retailer__user=user
+                    ).select_related('company').first()
+                
+                if access and access.company:
+                    profile_data['company_name'] = access.company.name
+                    
         except Exception as e:
             # Log error but continue with base profile
             print(f"Error fetching retailer details: {e}")
