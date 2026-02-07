@@ -37,10 +37,10 @@ const ProfilePage = () => {
     const checkProfile = async () => {
       try {
         const contextResponse = await fetchWithAuth(`${API_URL}/users/me/context/`);
-        
+
         if (contextResponse.ok) {
           const context = await contextResponse.json();
-          
+
           // If is_portal_user is false, profile not complete - redirect to setup
           if (!context.is_portal_user) {
             router.replace('/retailer/setup');
@@ -50,7 +50,7 @@ const ProfilePage = () => {
           router.replace('/retailer/setup');
           return;
         }
-        
+
         setProfileChecked(true);
       } catch (error) {
         router.replace('/retailer/setup');
@@ -68,7 +68,7 @@ const ProfilePage = () => {
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      const response = await fetchWithAuth(`${API_URL}/users/me/`);
+      const response = await fetchWithAuth(`${API_URL}/portal/profile/`);
       if (response.ok) {
         const data = await response.json();
         setProfile(data);
@@ -89,7 +89,7 @@ const ProfilePage = () => {
     try {
       setSaving(true);
       setError(null);
-      const response = await fetchWithAuth(`${API_URL}/users/me/`, {
+      const response = await fetchWithAuth(`${API_URL}/portal/profile/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -107,7 +107,7 @@ const ProfilePage = () => {
         setTimeout(() => setSuccess(null), 3000);
       } else {
         const errorData = await response.json();
-        setError(errorData.message || 'Failed to update profile');
+        setError(errorData.message || errorData.error || 'Failed to update profile');
       }
     } catch (error) {
       console.error('Failed to update profile:', error);
@@ -161,7 +161,7 @@ const ProfilePage = () => {
   return (
     <div className="min-h-screen bg-neutral-950">
       <RetailerNavbar />
-      
+
       <div className="container mx-auto p-6 max-w-4xl">
         {/* Header */}
         <div className="bg-neutral-900 rounded-lg shadow border border-neutral-800 p-6 mb-6">

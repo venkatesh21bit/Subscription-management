@@ -31,6 +31,10 @@ class PostLoginRoutingMiddleware(MiddlewareMixin):
         '/partner/profile',
         '/health',
         '/admin',
+        # Company creation/setup endpoints (needed before company exists)
+        '/api/company/create',
+        '/api/company/currencies',
+        '/api/company/onboarding',
     ]
     
     def should_check_routing(self, request):

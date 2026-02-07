@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/utils/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,7 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trash2, Plus, Edit2 } from 'lucide-react';
+import { Trash2, Plus, Edit2, Eye } from 'lucide-react';
 
 interface RecurringPrice {
   id?: string;
@@ -48,11 +48,17 @@ const PRODUCT_TYPES = [
 export default function ProductFormPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const isEdit = params?.id && params.id !== 'new';
-  
+  const isNew = params?.id === 'new';
+
+  // View mode: determined by query param, default to 'view' for existing products
+  const initialMode = searchParams.get('mode') || (isNew ? 'edit' : 'view');
+  const [isViewMode, setIsViewMode] = useState(initialMode === 'view');
+
   const [loading, setLoading] = useState(false);
   const [plans, setPlans] = useState<any[]>([]);
-  
+
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -61,21 +67,21 @@ export default function ProductFormPage() {
     sales_price: '',
     cost: '',
   });
-  
+
   const [recurringPrices, setRecurringPrices] = useState<RecurringPrice[]>([]);
   const [variants, setVariants] = useState<Variant[]>([]);
-  
+
   // Modal states for adding/editing
   const [showRecurringModal, setShowRecurringModal] = useState(false);
   const [showVariantModal, setShowVariantModal] = useState(false);
   const [editingRecurring, setEditingRecurring] = useState<RecurringPrice | null>(null);
   const [editingVariant, setEditingVariant] = useState<Variant | null>(null);
-  
+
   const [errors, setErrors] = useState<any>({});
 
   useEffect(() => {
     fetchPlans();
-    
+
     if (isEdit) {
       fetchProduct();
     }
@@ -97,7 +103,7 @@ export default function ProductFormPage() {
       setLoading(true);
       const response = await apiClient.get(`/catalog/products/${params?.id}/`);
       const product = response.data as any;
-      
+
       setFormData({
         name: product.name || '',
         product_type: product.product_type || 'GOODS',
@@ -105,7 +111,7 @@ export default function ProductFormPage() {
         sales_price: product.price || '',
         cost: product.cost || '',
       });
-      
+
       // Load recurring prices and variants if available
       // These would come from the API response
       setRecurringPrices(product.recurring_prices || []);
@@ -122,7 +128,7 @@ export default function ProductFormPage() {
       ...prev,
       [field]: value
     }));
-    
+
     // Clear error for this field
     if (errors[field]) {
       setErrors((prev: any) => {
@@ -135,26 +141,26 @@ export default function ProductFormPage() {
 
   const validateForm = () => {
     const newErrors: any = {};
-    
+
     if (!formData.name.trim()) {
       newErrors.name = 'Product name is required';
     }
-    
+
     if (!formData.sales_price || parseFloat(formData.sales_price) < 0) {
       newErrors.sales_price = 'Sales price must be a positive number';
     }
-    
+
     if (!formData.cost || parseFloat(formData.cost) < 0) {
       newErrors.cost = 'Cost must be a positive number';
     }
-    
+
     // Validate: sales_price >= cost
     if (formData.sales_price && formData.cost) {
       if (parseFloat(formData.sales_price) < parseFloat(formData.cost)) {
         newErrors.sales_price = 'Sales price must be greater than or equal to cost';
       }
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -163,14 +169,14 @@ export default function ProductFormPage() {
     if (!validateForm()) {
       return;
     }
-    
+
     try {
       setLoading(true);
-      
+
       // Remove temporary IDs from recurring prices and variants
       const cleanRecurringPrices = recurringPrices.map(({ id, ...rest }) => rest);
       const cleanVariants = variants.map(({ id, ...rest }) => rest);
-      
+
       const payload = {
         name: formData.name,
         product_type: formData.product_type,
@@ -180,14 +186,14 @@ export default function ProductFormPage() {
         recurring_prices: cleanRecurringPrices,
         variants: cleanVariants,
       };
-      
+
       let response;
       if (isEdit) {
         response = await apiClient.put(`/catalog/products/${params?.id}/`, payload);
       } else {
         response = await apiClient.post('/catalog/products/', payload);
       }
-      
+
       if (response.data) {
         router.push('/manufacturer/products');
       }
@@ -208,7 +214,7 @@ export default function ProductFormPage() {
   // Recurring Price handlers
   const handleAddRecurringPrice = (price: RecurringPrice) => {
     if (editingRecurring) {
-      setRecurringPrices(prev => 
+      setRecurringPrices(prev =>
         prev.map(p => p.id === editingRecurring.id ? { ...price, id: editingRecurring.id } : p)
       );
     } else {
@@ -230,7 +236,7 @@ export default function ProductFormPage() {
   // Variant handlers
   const handleAddVariant = (variant: Variant) => {
     if (editingVariant) {
-      setVariants(prev => 
+      setVariants(prev =>
         prev.map(v => v.id === editingVariant.id ? { ...variant, id: editingVariant.id } : v)
       );
     } else {
@@ -252,10 +258,29 @@ export default function ProductFormPage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">
-          {isEdit ? 'Edit Product' : 'New Product'}
-        </h1>
+      <div className="mb-6 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          {isViewMode ? <Eye className="w-6 h-6 text-blue-400" /> : <Edit2 className="w-6 h-6 text-yellow-400" />}
+          <h1 className="text-2xl font-bold">
+            {isNew ? 'New Product' : isViewMode ? 'View Product' : 'Edit Product'}
+          </h1>
+        </div>
+        {isEdit && (
+          <Button
+            onClick={() => setIsViewMode(!isViewMode)}
+            variant="outline"
+            className={isViewMode
+              ? "bg-yellow-600 hover:bg-yellow-700 text-white border-yellow-500"
+              : "bg-blue-600 hover:bg-blue-700 text-white border-blue-500"
+            }
+          >
+            {isViewMode ? (
+              <><Edit2 className="w-4 h-4 mr-2" /> Switch to Edit</>
+            ) : (
+              <><Eye className="w-4 h-4 mr-2" /> Switch to View</>
+            )}
+          </Button>
+        )}
       </div>
 
       <div className="max-w-5xl mx-auto bg-gray-800 rounded-lg p-6">
@@ -270,6 +295,7 @@ export default function ProductFormPage() {
               onChange={(e) => handleInputChange('name', e.target.value)}
               className="bg-gray-700 border-gray-600 text-white mt-1"
               placeholder="Enter product name"
+              disabled={isViewMode}
             />
             {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
           </div>
@@ -278,7 +304,7 @@ export default function ProductFormPage() {
             {/* Product Type */}
             <div>
               <Label htmlFor="product_type" className="text-gray-300">Product Type</Label>
-              <Select value={formData.product_type} onValueChange={(value) => handleInputChange('product_type', value)}>
+              <Select value={formData.product_type} onValueChange={(value) => handleInputChange('product_type', value)} disabled={isViewMode}>
                 <SelectTrigger className="bg-gray-700 border-gray-600 text-white mt-1">
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
@@ -303,6 +329,7 @@ export default function ProductFormPage() {
                 onChange={(e) => handleInputChange('tax', e.target.value)}
                 className="bg-gray-700 border-gray-600 text-white mt-1"
                 placeholder="0.00"
+                disabled={isViewMode}
               />
             </div>
           </div>
@@ -319,6 +346,7 @@ export default function ProductFormPage() {
                 onChange={(e) => handleInputChange('sales_price', e.target.value)}
                 className="bg-gray-700 border-gray-600 text-white mt-1"
                 placeholder="0.00"
+                disabled={isViewMode}
               />
               {errors.sales_price && <p className="text-red-500 text-sm mt-1">{errors.sales_price}</p>}
             </div>
@@ -334,6 +362,7 @@ export default function ProductFormPage() {
                 onChange={(e) => handleInputChange('cost', e.target.value)}
                 className="bg-gray-700 border-gray-600 text-white mt-1"
                 placeholder="0.00"
+                disabled={isViewMode}
               />
               {errors.cost && <p className="text-red-500 text-sm mt-1">{errors.cost}</p>}
             </div>
@@ -485,23 +514,34 @@ export default function ProductFormPage() {
             </Table>
           </TabsContent>
         </Tabs>
-
         {/* Form Actions */}
         <div className="mt-6 flex justify-end gap-4">
-          <Button
-            onClick={handleCancel}
-            variant="outline"
-            className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={loading}
-            className="bg-pink-600 hover:bg-pink-700 text-white"
-          >
-            {loading ? 'Saving...' : 'Save'}
-          </Button>
+          {isViewMode ? (
+            <Button
+              onClick={handleCancel}
+              variant="outline"
+              className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
+            >
+              Back to List
+            </Button>
+          ) : (
+            <>
+              <Button
+                onClick={handleCancel}
+                variant="outline"
+                className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={loading}
+                className="bg-pink-600 hover:bg-pink-700 text-white"
+              >
+                {loading ? 'Saving...' : 'Save'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
