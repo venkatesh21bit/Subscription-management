@@ -209,8 +209,9 @@ class JoinByCompanyCodeView(APIView):
             )
         
         # Create pending connection request
-        # Get optional message from request
-        message = request.data.get('message', '').strip()
+        # Get optional message from request (handle None from JSON)
+        message = request.data.get('message') or ''
+        message = message.strip() if message else ''
         notes = message if message else f"Request to join via company code: {company_code}"
         
         connection = RetailerCompanyAccess.objects.create(
