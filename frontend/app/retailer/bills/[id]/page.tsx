@@ -145,7 +145,7 @@ export default function RetailerBillDetailPage() {
         payments: data.payments || [],
         total_amount: data.total_amount ?? data.grand_total ?? 0,
         paid_amount: data.paid_amount ?? data.amount_received ?? 0,
-        outstanding_amount: data.outstanding_amount ?? (data.grand_total - data.amount_received) ?? 0,
+        outstanding_amount: data.outstanding_amount ?? ((data.grand_total ?? 0) - (data.amount_received ?? 0)),
         currency_symbol: data.currency_symbol || '$',
         currency_code: data.currency_code || 'USD',
         party_name: data.party_name || '',
