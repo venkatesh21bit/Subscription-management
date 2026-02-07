@@ -128,9 +128,8 @@ class SubscriptionInvoiceService:
                 from apps.inventory.models import StockItem, UnitOfMeasure
                 
                 default_uom, _ = UnitOfMeasure.objects.get_or_create(
-                    company=subscription.company,
-                    code='SVC',
-                    defaults={'name': 'Service', 'is_active': True}
+                    symbol='SVC',
+                    defaults={'name': 'Service', 'category': 'QUANTITY'}
                 )
                 
                 subscription_stock_item, _ = StockItem.objects.get_or_create(
