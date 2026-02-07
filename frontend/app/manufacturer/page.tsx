@@ -412,7 +412,8 @@ const generateInvoiceForOrder = async (orderId: string) => {
     if (response.error) {
       throw new Error(response.error || "Failed to generate invoice");
     }
-    alert(`Invoice ${response.data?.invoice_number || ''} created successfully!`);
+    const invoiceNum = (response.data as Record<string, unknown>)?.invoice_number || '';
+    alert(`Invoice ${invoiceNum} created successfully!`);
     fetchOrders();
   } catch (err) {
     alert((err as Error).message);
