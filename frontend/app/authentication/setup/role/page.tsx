@@ -11,10 +11,10 @@ import {
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Building2, ShoppingCart, Truck, Users, Award } from "lucide-react";
+import { Building2, ShoppingCart } from "lucide-react";
 import { apiClient } from "@/utils/api";
 
-type UserRole = "MANUFACTURER" | "RETAILER" | "WHOLESALER" | "SUPPLIER" | "LOGISTICS" | "SERVICE";
+type UserRole = "MANUFACTURER" | "RETAILER";
 
 interface ContextResponse {
   role?: string;
@@ -37,34 +37,6 @@ const roleOptions = [
     description: "I run a retail business",
     icon: ShoppingCart,
     color: "from-green-500 to-green-600",
-  },
-  {
-    id: "WHOLESALER",
-    title: "Wholesaler / Distributor",
-    description: "I distribute products wholesale",
-    icon: Truck,
-    color: "from-purple-500 to-purple-600",
-  },
-  {
-    id: "SUPPLIER",
-    title: "Supplier",
-    description: "I supply materials or products",
-    icon: Users,
-    color: "from-orange-500 to-orange-600",
-  },
-  {
-    id: "LOGISTICS",
-    title: "Logistics / Transport",
-    description: "I provide logistics or transport services",
-    icon: Truck,
-    color: "from-red-500 to-red-600",
-  },
-  {
-    id: "SERVICE",
-    title: "Service / Auditor",
-    description: "I provide services or audit services",
-    icon: Award,
-    color: "from-indigo-500 to-indigo-600",
   },
 ];
 
@@ -89,6 +61,16 @@ const RoleSelectionPage = () => {
         return;
       }
 
+      // Store updated tokens from role selection response
+      if (roleResponse.data) {
+        if (roleResponse.data.access) {
+          localStorage.setItem("access_token", roleResponse.data.access);
+        }
+        if (roleResponse.data.refresh) {
+          localStorage.setItem("refresh_token", roleResponse.data.refresh);
+        }
+      }
+
       // Get updated context to determine next route
       const contextResponse = await apiClient.get<ContextResponse>("/users/me/context/");
 
@@ -107,13 +89,6 @@ const RoleSelectionPage = () => {
           // Retailer goes directly to retailer setup
           // The setup page handles profile check and manufacturer connection
           router.replace("/retailer/setup");
-        } else {
-          // Other external roles (WHOLESALER, SUPPLIER, LOGISTICS, SERVICE)
-          if (!context.manufacturer_linked) {
-            router.replace("/authentication/setup/external");
-          } else {
-            router.replace("/retailer");
-          }
         }
       } else {
         setError(contextResponse.error || "Failed to fetch updated context");

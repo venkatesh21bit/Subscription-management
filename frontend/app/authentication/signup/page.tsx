@@ -120,6 +120,15 @@ const SignUpPage = () => {
 
       if (!response.error && response.data) {
         setMessage("Registration successful! Redirecting...");
+        
+        // Store authentication tokens
+        if (response.data.access) {
+          localStorage.setItem("access_token", response.data.access);
+        }
+        if (response.data.refresh) {
+          localStorage.setItem("refresh_token", response.data.refresh);
+        }
+        
         // Store the user info temporarily for the next step
         localStorage.setItem("temp_user_email", data.email);
         localStorage.setItem("temp_user_phone", data.phone);

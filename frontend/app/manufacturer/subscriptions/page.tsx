@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Search, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -15,44 +15,96 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
+import { api } from "@/utils/api"
 
-// Subscription type definition
+// Subscription type definition matching API response
 type Subscription = {
-    number: string;
+    id: string;
+    subscription_number: string;
     customer: string;
-    nextInvoice: string;
-    recurring: string;
-    plan: string;
+    customer_id: string;
+    full_name: string;
+    expiration: string | null;
+    monthly: string;
+    plan_name: string;
+    recurring_plan: string;
     status: string;
+    status_display: string;
+    start_date: string;
+    created_at: string;
 }
-
-// Empty subscriptions array - ready for API integration
-const subscriptions: Subscription[] = [];
 
 // Helper function to get badge variant based on status
 const getStatusVariant = (status: string) => {
     switch (status) {
-        case "Active":
-            return "success"
-        case "Quotation Sent":
-            return "warning"
-        case "Draft":
-            return "secondary"
-        default:
+        case "ACTIVE":
             return "default"
+        case "QUOTATION":
+            return "secondary" 
+        case "CONFIRMED":
+            return "default"
+        case "DRAFT":
+            return "secondary"
+        case "PAUSED":
+            return "warning"
+        case "CANCELLED":
+            return "destructive"
+        case "CLOSED":
+            return "outline"
+        default:
+            return "secondary"
     }
+}
+
+// Helper function to format date
+const formatDate = (dateString: string | null) => {
+    if (!dateString) return "No end date"
+    return new Date(dateString).toLocaleDateString()
 }
 
 export default function SubscriptionsPage() {
     const router = useRouter()
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedRows, setSelectedRows] = useState<string[]>([])
+    const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+
+    // Fetch subscriptions from API
+    const fetchSubscriptions = async () => {
+        try {
+            setLoading(true)
+            setError(null)
+            
+            const response = await api<{subscriptions: Subscription[], count: number}>(
+                '/subscriptions/subscriptions/',
+                { method: 'GET' }
+            )
+            
+            if (response.error) {
+                setError(response.error)
+            } else if (response.data) {
+                setSubscriptions(response.data.subscriptions)
+            }
+        } catch (err) {
+            setError('Failed to fetch subscriptions')
+            console.error('Error fetching subscriptions:', err)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // Load subscriptions on component mount
+    useEffect(() => {
+        fetchSubscriptions()
+    }, [])
 
     // Filter subscriptions based on search query
     const filteredSubscriptions = subscriptions.filter((sub) =>
-        Object.values(sub).some((value) =>
-            value.toString().toLowerCase().includes(searchQuery.toLowerCase())
-        )
+        sub.subscription_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        sub.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        sub.plan_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        sub.status.toLowerCase().includes(searchQuery.toLowerCase())
     )
 
     // Select all handler
@@ -60,22 +112,23 @@ export default function SubscriptionsPage() {
         if (selectedRows.length === filteredSubscriptions.length) {
             setSelectedRows([])
         } else {
-            setSelectedRows(filteredSubscriptions.map((sub) => sub.number))
+            setSelectedRows(filteredSubscriptions.map((sub) => sub.id))
         }
     }
 
     // Row selection handler
-    const handleRowSelect = (subscriptionNumber: string) => {
-        if (selectedRows.includes(subscriptionNumber)) {
-            setSelectedRows(selectedRows.filter((num) => num !== subscriptionNumber))
+    const handleRowSelect = (subscriptionId: string) => {
+        if (selectedRows.includes(subscriptionId)) {
+            setSelectedRows(selectedRows.filter((id) => id !== subscriptionId))
         } else {
-            setSelectedRows([...selectedRows, subscriptionNumber])
+            setSelectedRows([...selectedRows, subscriptionId])
         }
     }
 
     // Delete handler
-    const handleDelete = () => {
-        console.log("Deleted:", selectedRows)
+    const handleDelete = async () => {
+        console.log("Delete subscriptions:", selectedRows)
+        // TODO: Implement delete API call
         setSelectedRows([])
     }
 
@@ -141,33 +194,53 @@ export default function SubscriptionsPage() {
                             </TableHead>
                             <TableHead className="w-[100px]">Number</TableHead>
                             <TableHead>Customer</TableHead>
-                            <TableHead>Next Invoice</TableHead>
+                            <TableHead>Expiration</TableHead>
                             <TableHead>Recurring</TableHead>
                             <TableHead>Plan</TableHead>
                             <TableHead>Status</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredSubscriptions.length > 0 ? (
+                        {loading ? (
+                            <TableRow>
+                                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                                    Loading subscriptions...
+                                </TableCell>
+                            </TableRow>
+                        ) : error ? (
+                            <TableRow>
+                                <TableCell colSpan={7} className="text-center py-8 text-red-500">
+                                    Error: {error}
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        onClick={fetchSubscriptions}
+                                        className="ml-2"
+                                    >
+                                        Retry
+                                    </Button>
+                                </TableCell>
+                            </TableRow>
+                        ) : filteredSubscriptions.length > 0 ? (
                             filteredSubscriptions.map((subscription) => (
-                                <TableRow key={subscription.number}>
+                                <TableRow key={subscription.id}>
                                     <TableCell>
                                         <Checkbox
-                                            checked={selectedRows.includes(subscription.number)}
-                                            onCheckedChange={() => handleRowSelect(subscription.number)}
-                                            aria-label={`Select ${subscription.number}`}
+                                            checked={selectedRows.includes(subscription.id)}
+                                            onCheckedChange={() => handleRowSelect(subscription.id)}
+                                            aria-label={`Select ${subscription.subscription_number}`}
                                         />
                                     </TableCell>
                                     <TableCell className="font-medium">
-                                        {subscription.number}
+                                        {subscription.subscription_number}
                                     </TableCell>
                                     <TableCell>{subscription.customer}</TableCell>
-                                    <TableCell>{subscription.nextInvoice}</TableCell>
-                                    <TableCell>{subscription.recurring}</TableCell>
-                                    <TableCell>{subscription.plan}</TableCell>
+                                    <TableCell>{formatDate(subscription.expiration)}</TableCell>
+                                    <TableCell>{subscription.recurring_plan}</TableCell>
+                                    <TableCell>{subscription.plan_name}</TableCell>
                                     <TableCell>
                                         <Badge variant={getStatusVariant(subscription.status) as any}>
-                                            {subscription.status}
+                                            {subscription.status_display}
                                         </Badge>
                                     </TableCell>
                                 </TableRow>
@@ -184,7 +257,7 @@ export default function SubscriptionsPage() {
             </div>
 
             {/* Results Count */}
-            {filteredSubscriptions.length > 0 && (
+            {!loading && !error && (
                 <div className="mt-4 text-sm text-gray-600">
                     Showing {filteredSubscriptions.length} of {subscriptions.length} subscriptions
                 </div>
