@@ -34,7 +34,8 @@ CORS_ALLOWED_ORIGINS = [
     # Add your production frontend URLs here
 ]
 
-CORS_ALLOW_CREDENTIALS = True
+# Using JWT Bearer tokens, not cookies, so credentials not needed
+CORS_ALLOW_CREDENTIALS = False
 
 CORS_ALLOW_METHODS = [
     'DELETE',
