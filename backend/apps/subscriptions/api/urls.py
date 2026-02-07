@@ -69,4 +69,8 @@ urlpatterns = [
     
     path('quotation-templates-config/', QuotationTemplateListCreateView.as_view(), name='quotation-template-config-list-create'),
     path('quotation-templates-config/<uuid:template_id>/', QuotationTemplateConfigDetailView.as_view(), name='quotation-template-config-detail'),
+    
+    # Retailer subscription endpoints
+    path('my-subscriptions/', views.RetailerSubscriptionListView.as_view(), name='retailer-subscription-list'),
+    path('my-subscriptions/<uuid:subscription_id>/action/', views.RetailerSubscriptionActionView.as_view(), name='retailer-subscription-action'),
 ]

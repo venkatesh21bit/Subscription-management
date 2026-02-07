@@ -1303,3 +1303,156 @@ class SubscriptionBulkBillingView(APIView):
             'message': 'Bulk billing processing completed',
             'results': results
         }, status=status.HTTP_200_OK)
+
+
+# ================================================================
+# RETAILER SUBSCRIPTION VIEWS
+# ================================================================
+
+class RetailerSubscriptionListView(APIView):
+    """
+    List subscriptions for the logged-in retailer.
+    Returns subscriptions where the retailer's party is the subscriber.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        from apps.party.models import RetailerUser
+        
+        # Get retailer's party IDs
+        retailer_party_ids = list(
+            RetailerUser.objects.filter(
+                user=request.user, status='APPROVED', party__isnull=False
+            ).values_list('party_id', flat=True)
+        )
+        
+        if not retailer_party_ids:
+            return Response({'subscriptions': [], 'count': 0})
+        
+        subscriptions = Subscription.objects.filter(
+            party_id__in=retailer_party_ids
+        ).select_related('party', 'plan', 'currency').order_by('-created_at')
+        
+        # Filters
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            subscriptions = subscriptions.filter(status=status_filter)
+        
+        search = request.query_params.get('search')
+        if search:
+            subscriptions = subscriptions.filter(
+                Q(subscription_number__icontains=search) |
+                Q(plan__name__icontains=search)
+            )
+        
+        data = []
+        for sub in subscriptions:
+            data.append({
+                'id': str(sub.id),
+                'subscription_number': sub.subscription_number,
+                'plan_name': sub.plan.name,
+                'status': sub.status,
+                'status_display': sub.get_status_display(),
+                'start_date': sub.start_date.isoformat() if sub.start_date else None,
+                'end_date': sub.end_date.isoformat() if sub.end_date else None,
+                'next_billing_date': sub.next_billing_date.isoformat() if sub.next_billing_date else None,
+                'billing_cycle_count': sub.billing_cycle_count,
+                'monthly_value': float(sub.monthly_value),
+                'currency': {
+                    'code': sub.currency.code if sub.currency else 'USD',
+                    'symbol': sub.currency.symbol if sub.currency else '$',
+                } if sub.currency else {'code': 'USD', 'symbol': '$'},
+                'billing_interval': sub.plan.billing_interval,
+                'billing_interval_display': sub.plan.get_billing_interval_display(),
+                # Plan options - used by frontend to show/hide action buttons
+                'is_pausable': sub.plan.is_pausable,
+                'is_closable': sub.plan.is_closable,
+                'is_renewable': sub.plan.is_renewable,
+                'is_auto_closable': sub.plan.is_auto_closable,
+                'created_at': sub.created_at.isoformat() if sub.created_at else None,
+            })
+        
+        return Response({'subscriptions': data, 'count': len(data)})
+
+
+class RetailerSubscriptionActionView(APIView):
+    """
+    Retailer actions on their subscription.
+    
+    POST /subscriptions/my-subscriptions/{id}/action/
+    Body: { action: "pause" | "resume" | "close", reason?: string }
+    
+    Actions respect plan options:
+    - pause: Only if plan.is_pausable and subscription is ACTIVE
+    - resume: Only if subscription is PAUSED
+    - close: Only if plan.is_closable and subscription is ACTIVE/PAUSED
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, subscription_id):
+        from apps.party.models import RetailerUser
+        
+        retailer_party_ids = list(
+            RetailerUser.objects.filter(
+                user=request.user, status='APPROVED', party__isnull=False
+            ).values_list('party_id', flat=True)
+        )
+        
+        if not retailer_party_ids:
+            return Response({'error': 'No retailer access'}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            subscription = Subscription.objects.select_related('plan').get(
+                id=subscription_id, party_id__in=retailer_party_ids
+            )
+        except Subscription.DoesNotExist:
+            return Response({'error': 'Subscription not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        action = request.data.get('action')
+        reason = request.data.get('reason', '')
+        
+        if not action:
+            return Response({'error': 'Action is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            if action == 'pause':
+                if subscription.status != SubscriptionStatus.ACTIVE:
+                    raise ValueError('Only active subscriptions can be paused')
+                if not subscription.plan.is_pausable:
+                    raise ValueError('This subscription plan does not allow pausing')
+                subscription.status = SubscriptionStatus.PAUSED
+                msg = 'Subscription paused successfully'
+            
+            elif action == 'resume':
+                if subscription.status != SubscriptionStatus.PAUSED:
+                    raise ValueError('Only paused subscriptions can be resumed')
+                subscription.status = SubscriptionStatus.ACTIVE
+                msg = 'Subscription resumed successfully'
+            
+            elif action == 'close':
+                if subscription.status not in [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAUSED]:
+                    raise ValueError('Only active or paused subscriptions can be closed')
+                if not subscription.plan.is_closable:
+                    raise ValueError('This subscription plan does not allow closing')
+                subscription.status = SubscriptionStatus.CLOSED
+                subscription.closed_at = timezone.now()
+                subscription.cancellation_reason = reason
+                msg = 'Subscription closed successfully'
+            
+            else:
+                return Response({'error': f'Invalid action: {action}'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            subscription.save()
+            
+            return Response({
+                'message': msg,
+                'subscription': {
+                    'id': str(subscription.id),
+                    'subscription_number': subscription.subscription_number,
+                    'status': subscription.status,
+                    'status_display': subscription.get_status_display(),
+                }
+            })
+            
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

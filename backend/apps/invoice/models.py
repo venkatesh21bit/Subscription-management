@@ -296,3 +296,69 @@ class InvoiceLine(BaseModel):
 
     def __str__(self):
         return f"Invoice {self.invoice.invoice_number} Line {self.line_no}: {self.item.sku}"
+
+
+class InvoicePayment(BaseModel):
+    """
+    Simple payment record against an invoice.
+    Tracks retailer payments: method, amount, date.
+    Updates invoice.amount_received and status on save.
+    """
+    invoice = models.ForeignKey(
+        Invoice, on_delete=models.CASCADE, related_name='payments'
+    )
+    amount = models.DecimalField(
+        max_digits=16, decimal_places=2,
+        help_text="Payment amount"
+    )
+    payment_method = models.CharField(
+        max_length=50,
+        choices=[
+            ('CASH', 'Cash'),
+            ('UPI', 'UPI'),
+            ('BANK_TRANSFER', 'Bank Transfer'),
+            ('CARD', 'Card'),
+            ('CHEQUE', 'Cheque'),
+            ('OTHER', 'Other'),
+        ],
+        default='CASH',
+        help_text="Payment method"
+    )
+    payment_date = models.DateField(help_text="Date of payment")
+    reference_number = models.CharField(
+        max_length=100, blank=True,
+        help_text="Transaction/cheque reference number"
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "Invoice Payment"
+        verbose_name_plural = "Invoice Payments"
+        ordering = ['-payment_date', '-created_at']
+        indexes = [
+            models.Index(fields=['invoice', 'payment_date']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount__gt=0),
+                name="invoice_payment_amount_positive",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Payment {self.amount} on {self.invoice.invoice_number}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Recalculate invoice amount_received from all payments
+        from django.db.models import Sum
+        total_paid = InvoicePayment.objects.filter(
+            invoice=self.invoice
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        
+        self.invoice.amount_received = total_paid
+        if total_paid >= self.invoice.grand_total:
+            self.invoice.status = 'PAID'
+        elif total_paid > 0:
+            self.invoice.status = 'PARTIALLY_PAID'
+        self.invoice.save(update_fields=['amount_received', 'status'])

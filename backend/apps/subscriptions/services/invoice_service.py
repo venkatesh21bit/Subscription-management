@@ -11,7 +11,6 @@ import uuid
 from apps.subscriptions.models import Subscription, SubscriptionItem
 from apps.invoice.models import Invoice, InvoiceLine, InvoiceStatus
 from apps.party.models import Party
-from apps.accounting.models import AccountGroup, Ledger
 
 
 class SubscriptionInvoiceService:
@@ -54,10 +53,19 @@ class SubscriptionInvoiceService:
                 else:  # DAILY
                     billing_period_end = billing_period_start + timedelta(days=1)
             
-            # Generate invoice number
-            invoice_number = f"INV-{subscription.company.code}-{uuid.uuid4().hex[:8].upper()}"
+            # Resolve currency - use subscription's currency or company default
+            currency = subscription.currency
+            if not currency:
+                from apps.company.models import Currency
+                currency = Currency.objects.first()
+                if not currency:
+                    raise ValueError("No currency configured. Please create a currency first.")
             
-            # Create invoice
+            # Generate invoice number
+            company_code = getattr(subscription.company, 'code', 'SUB')
+            invoice_number = f"INV-{company_code}-{uuid.uuid4().hex[:8].upper()}"
+            
+            # Create invoice (use correct model field names: subtotal, grand_total)
             invoice = Invoice.objects.create(
                 company=subscription.company,
                 invoice_number=invoice_number,
@@ -65,21 +73,19 @@ class SubscriptionInvoiceService:
                 party=subscription.party,
                 invoice_type='SALES',
                 status=InvoiceStatus.DRAFT,
-                due_date=timezone.now().date() + timedelta(days=30),  # 30 days payment terms
-                currency=subscription.currency,
+                due_date=timezone.now().date() + timedelta(days=30),
+                currency=currency,
                 financial_year=subscription.company.financialyear_set.filter(is_current=True).first(),
                 billing_period_start=billing_period_start,
                 billing_period_end=billing_period_end,
-                notes=f"Invoice for subscription {subscription.plan.name}",
+                is_auto_generated=True,
+                notes=f"Invoice for subscription {subscription.plan.name} ({subscription.subscription_number})",
                 terms_and_conditions=subscription.payment_terms or "Payment due within 30 days",
-                total_amount=Decimal('0.00'),
-                tax_amount=Decimal('0.00'),
-                discount_amount=Decimal('0.00')
             )
             
             # Add subscription items as invoice lines
-            total_amount = Decimal('0.00')
-            tax_amount = Decimal('0.00')
+            subtotal = Decimal('0.00')
+            tax_total = Decimal('0.00')
             subscription_items = SubscriptionItem.objects.filter(subscription=subscription)
             
             line_no = 1
@@ -92,17 +98,16 @@ class SubscriptionInvoiceService:
                 ).first()
                 
                 if not stock_item:
-                    # Skip if no stock item exists for this product
                     continue
                 
                 # Calculate line amounts
                 line_subtotal = item.unit_price * item.quantity
-                discount_amount = line_subtotal * (item.discount_pct / Decimal('100'))
-                line_total_after_discount = line_subtotal - discount_amount
+                line_discount = line_subtotal * (item.discount_pct / Decimal('100'))
+                line_total_after_discount = line_subtotal - line_discount
                 line_tax = line_total_after_discount * (item.tax_rate / Decimal('100'))
                 
-                total_amount += line_total_after_discount
-                tax_amount += line_tax
+                subtotal += line_total_after_discount
+                tax_total += line_tax
                 
                 InvoiceLine.objects.create(
                     invoice=invoice,
@@ -119,19 +124,16 @@ class SubscriptionInvoiceService:
                 line_no += 1
             
             # If no subscription items with stock items, use plan base price
-            if line_no == 1:  # No lines were added
-                # Get or create a generic subscription service item
+            if line_no == 1:
                 from apps.inventory.models import StockItem, UnitOfMeasure
                 
-                # Get a default UOM (e.g., "Service" or "Each")
                 default_uom, _ = UnitOfMeasure.objects.get_or_create(
                     company=subscription.company,
                     code='SVC',
                     defaults={'name': 'Service', 'is_active': True}
                 )
                 
-                # Get or create generic subscription stock item
-                subscription_item, _ = StockItem.objects.get_or_create(
+                subscription_stock_item, _ = StockItem.objects.get_or_create(
                     company=subscription.company,
                     sku='SUBSCRIPTION',
                     defaults={
@@ -143,12 +145,12 @@ class SubscriptionInvoiceService:
                 )
                 
                 line_total = subscription.calculate_monthly_value()
-                total_amount = line_total
+                subtotal = line_total
                 
                 InvoiceLine.objects.create(
                     invoice=invoice,
                     line_no=1,
-                    item=subscription_item,
+                    item=subscription_stock_item,
                     description=f"Subscription: {subscription.plan.name}",
                     quantity=Decimal('1.00'),
                     uom=default_uom,
@@ -158,52 +160,46 @@ class SubscriptionInvoiceService:
                     tax_amount=Decimal('0.00')
                 )
             
-            # Apply discount if any (at subscription level)
+            # Apply subscription-level discount
             discount_amount = Decimal('0.00')
-            if hasattr(subscription, 'discount_value') and subscription.discount_value and subscription.discount_value > 0:
+            if subscription.discount_value and subscription.discount_value > 0:
                 if subscription.discount_type == 'PERCENTAGE':
-                    discount_amount = total_amount * (subscription.discount_value / 100)
-                else:  # FIXED
-                    discount_amount = min(subscription.discount_value, total_amount)
-                
-                total_amount -= discount_amount
+                    discount_amount = subtotal * (subscription.discount_value / 100)
+                else:
+                    discount_amount = min(subscription.discount_value, subtotal)
+                subtotal -= discount_amount
             
-            # Calculate final total (subtotal - discount + tax)
-            final_total = total_amount + tax_amount
+            # Calculate final total
+            grand_total = subtotal + tax_total
             
-            # Update invoice totals
+            # Update invoice totals with correct field names
             invoice.discount_amount = discount_amount
-            invoice.subtotal = total_amount
-            invoice.tax_amount = tax_amount
-            invoice.total_amount = final_total
-            invoice.outstanding_amount = final_total
+            invoice.subtotal = subtotal
+            invoice.tax_amount = tax_total
+            invoice.grand_total = grand_total
             invoice.save()
             
-            # Update subscription next billing date
-            subscription.next_billing_date = billing_period_end
-            subscription.save()
+            # Update subscription billing tracking
+            subscription.last_billing_date = timezone.now().date()
+            subscription.next_billing_date = subscription.calculate_next_billing_date()
+            subscription.billing_cycle_count += 1
+            subscription.save(update_fields=['last_billing_date', 'next_billing_date', 'billing_cycle_count'])
             
             return invoice
             
         except Exception as e:
+            import traceback
             print(f"Error generating invoice from subscription {subscription.id}: {str(e)}")
-            return None
+            traceback.print_exc()
+            raise  # Re-raise so the caller gets the actual error
     
     @staticmethod
     @transaction.atomic
     def send_invoice_to_retailer(subscription: Subscription, auto_post=False):
         """
         Generate and send invoice to retailer.
-        
-        Args:
-            subscription: Subscription instance
-            auto_post: Whether to automatically post the invoice
-            
-        Returns:
-            Dict with success status and invoice data
         """
         try:
-            # Generate invoice
             invoice = SubscriptionInvoiceService.generate_invoice_from_subscription(subscription)
             
             if not invoice:
@@ -212,11 +208,10 @@ class SubscriptionInvoiceService:
                     'message': 'Failed to generate invoice from subscription'
                 }
             
-            # Auto-post the invoice if requested
+            # Auto-post: Draft → Posted (confirmed)
             if auto_post:
                 invoice.status = InvoiceStatus.POSTED
-                invoice.posted_at = timezone.now()
-                invoice.save()
+                invoice.save(update_fields=['status'])
             
             return {
                 'success': True,
@@ -224,36 +219,29 @@ class SubscriptionInvoiceService:
                 'invoice': {
                     'id': str(invoice.id),
                     'invoice_number': invoice.invoice_number,
-                    'total_amount': float(invoice.total_amount),
+                    'total_amount': float(invoice.grand_total),
                     'currency': invoice.currency.code if invoice.currency else 'USD',
                     'status': invoice.status,
                     'due_date': invoice.due_date.isoformat(),
                     'customer_name': invoice.party.name,
-                    'customer_email': invoice.party.email
+                    'customer_email': invoice.party.email or ''
                 }
             }
             
         except Exception as e:
             return {
                 'success': False,
-                'message': f'Error sending invoice to retailer: {str(e)}'
+                'message': f'Error: {str(e)}'
             }
     
     @staticmethod
     def process_billing_for_all_subscriptions(company=None):
         """
         Process billing for all active subscriptions due for billing.
-        
-        Args:
-            company: Optional company to filter subscriptions
-            
-        Returns:
-            Dict with processing results
         """
         try:
             today = timezone.now().date()
             
-            # Filter subscriptions due for billing
             filters = {
                 'status': 'ACTIVE',
                 'next_billing_date__lte': today
