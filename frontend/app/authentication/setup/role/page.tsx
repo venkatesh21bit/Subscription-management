@@ -68,12 +68,13 @@ const RoleSelectionPage = () => {
       }
 
       // Store updated tokens from role selection response
-      if (roleResponse.data) {
-        if (roleResponse.data.access) {
-          localStorage.setItem("access_token", roleResponse.data.access);
+      const responseData = roleResponse.data as RoleSelectionResponse | null;
+      if (responseData) {
+        if (responseData.access) {
+          localStorage.setItem("access_token", responseData.access);
         }
-        if (roleResponse.data.refresh) {
-          localStorage.setItem("refresh_token", roleResponse.data.refresh);
+        if (responseData.refresh) {
+          localStorage.setItem("refresh_token", responseData.refresh);
         }
       }
 
