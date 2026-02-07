@@ -1380,9 +1380,10 @@ class RetailerSubscriptionActionView(APIView):
     Retailer actions on their subscription.
     
     POST /subscriptions/my-subscriptions/{id}/action/
-    Body: { action: "pause" | "resume" | "close", reason?: string }
+    Body: { action: "activate" | "pause" | "resume" | "close", reason?: string }
     
     Actions respect plan options:
+    - activate: Only if subscription is CONFIRMED
     - pause: Only if plan.is_pausable and subscription is ACTIVE
     - resume: Only if subscription is PAUSED
     - close: Only if plan.is_closable and subscription is ACTIVE/PAUSED
@@ -1415,7 +1416,18 @@ class RetailerSubscriptionActionView(APIView):
             return Response({'error': 'Action is required'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            if action == 'pause':
+            if action == 'activate':
+                if subscription.status != SubscriptionStatus.CONFIRMED:
+                    raise ValueError('Only confirmed subscriptions can be activated')
+                subscription.status = SubscriptionStatus.ACTIVE
+                subscription.activated_at = timezone.now()
+                if not subscription.start_date:
+                    subscription.start_date = timezone.now().date()
+                if not subscription.next_billing_date:
+                    subscription.next_billing_date = timezone.now().date()
+                msg = 'Subscription activated successfully'
+            
+            elif action == 'pause':
                 if subscription.status != SubscriptionStatus.ACTIVE:
                     raise ValueError('Only active subscriptions can be paused')
                 if not subscription.plan.is_pausable:
@@ -1430,8 +1442,8 @@ class RetailerSubscriptionActionView(APIView):
                 msg = 'Subscription resumed successfully'
             
             elif action == 'close':
-                if subscription.status not in [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAUSED]:
-                    raise ValueError('Only active or paused subscriptions can be closed')
+                if subscription.status not in [SubscriptionStatus.ACTIVE, SubscriptionStatus.PAUSED, SubscriptionStatus.CONFIRMED]:
+                    raise ValueError('Only active, paused or confirmed subscriptions can be closed')
                 if not subscription.plan.is_closable:
                     raise ValueError('This subscription plan does not allow closing')
                 subscription.status = SubscriptionStatus.CLOSED

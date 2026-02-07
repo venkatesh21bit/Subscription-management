@@ -395,29 +395,26 @@ export default function RetailerSubscriptionsPage() {
                               Billing cycles completed: {sub.billing_cycle_count}
                             </p>
                           )}
-                          {/* Plan capabilities badges */}
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {sub.is_pausable && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
-                                <Pause className="h-3 w-3 mr-1" /> Pausable
-                              </span>
-                            )}
-                            {sub.is_closable && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700">
-                                <Power className="h-3 w-3 mr-1" /> Closable
-                              </span>
-                            )}
-                            {sub.is_renewable && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700">
-                                <RefreshCw className="h-3 w-3 mr-1" /> Renewable
-                              </span>
-                            )}
-                            {sub.is_auto_closable && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-50 text-orange-700">
-                                Auto-close
-                              </span>
-                            )}
-                          </div>
+                          {/* Plan capabilities badges (only for terminal states) */}
+                          {['CLOSED', 'CANCELLED'].includes(sub.status) && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {sub.is_pausable && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
+                                  <Pause className="h-3 w-3 mr-1" /> Pausable
+                                </span>
+                              )}
+                              {sub.is_closable && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700">
+                                  <Power className="h-3 w-3 mr-1" /> Closable
+                                </span>
+                              )}
+                              {sub.is_renewable && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700">
+                                  <RefreshCw className="h-3 w-3 mr-1" /> Renewable
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {/* Right: Amount + Actions */}
@@ -433,6 +430,19 @@ export default function RetailerSubscriptionsPage() {
 
                           {/* Action Buttons */}
                           <div className="flex flex-wrap gap-2">
+                            {/* Activate (only for CONFIRMED) */}
+                            {sub.status === 'CONFIRMED' && (
+                              <Button
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                                disabled={processingId === sub.id}
+                                onClick={() => handleSubscriptionAction(sub.id, 'activate')}
+                              >
+                                <Play className="h-4 w-4 mr-1" />
+                                Activate
+                              </Button>
+                            )}
+
                             {/* Pause (only for ACTIVE + pausable) */}
                             {sub.status === 'ACTIVE' && sub.is_pausable && (
                               <Button
@@ -451,8 +461,7 @@ export default function RetailerSubscriptionsPage() {
                             {sub.status === 'PAUSED' && (
                               <Button
                                 size="sm"
-                                variant="outline"
-                                className="text-green-700 border-green-300 hover:bg-green-50"
+                                className="bg-green-600 hover:bg-green-700 text-white"
                                 disabled={processingId === sub.id}
                                 onClick={() => handleSubscriptionAction(sub.id, 'resume')}
                               >
@@ -472,6 +481,20 @@ export default function RetailerSubscriptionsPage() {
                               >
                                 <Power className="h-4 w-4 mr-1" />
                                 Close
+                              </Button>
+                            )}
+
+                            {/* Cancel (CONFIRMED only + closable) */}
+                            {sub.status === 'CONFIRMED' && sub.is_closable && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-700 border-red-300 hover:bg-red-50"
+                                disabled={processingId === sub.id}
+                                onClick={() => handleSubscriptionAction(sub.id, 'close')}
+                              >
+                                <Power className="h-4 w-4 mr-1" />
+                                Cancel
                               </Button>
                             )}
                           </div>
