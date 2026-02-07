@@ -27,6 +27,7 @@ DATABASES = {
 
 # CORS Configuration for production
 CORS_ALLOWED_ORIGINS = [
+    "https://frontend-production-fbef1.up.railway.app",
     "https://vendor-frontend-production-be99.up.railway.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -34,6 +35,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CSRF_TRUSTED_ORIGINS = [
+    "https://frontend-production-fbef1.up.railway.app",
     "https://backend-production-8d38.up.railway.app",
     "https://vendor-backend-production-2053.up.railway.app",
     "https://vendor-frontend-production-be99.up.railway.app",

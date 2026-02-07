@@ -16,6 +16,11 @@ python manage.py migrate --noinput
 
 echo "Migrations completed successfully!"
 
+# Create default superuser if none exists
+echo "Checking for superuser..."
+python manage.py create_default_superuser
+
+echo "======================================"
 # Start Gunicorn server
 echo "Starting Gunicorn server on port ${PORT:-8080}..."
 exec gunicorn config.wsgi:application \
