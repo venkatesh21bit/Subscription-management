@@ -162,9 +162,29 @@ const BrowseProductsPage = () => {
   // Validate discount conditions against current cart
   const validateDiscount = (discount: Discount): { valid: boolean; reasons: string[] } => {
     const reasons: string[] = [];
-    // Backend eligibility (date range, usage limits, product applicability flag)
+    // Date check (client-side, using user's local date)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (discount.start_date) {
+      const start = new Date(discount.start_date + 'T00:00:00');
+      if (today < start) {
+        reasons.push(`Starts on ${discount.start_date}`);
+      }
+    }
+    if (discount.end_date) {
+      const end = new Date(discount.end_date + 'T23:59:59');
+      if (today > end) {
+        reasons.push(`Expired on ${discount.end_date}`);
+      }
+    }
+    // Backend eligibility (usage limits, product applicability flag)
     if (!discount.eligible) {
-      return { valid: false, reasons: discount.reasons || ['Not eligible'] };
+      const backendReasons = (discount.reasons || []).filter(r =>
+        !r.toLowerCase().includes('starts on') && !r.toLowerCase().includes('expired on')
+      );
+      reasons.push(...backendReasons);
+      if (reasons.length === 0) reasons.push('Not eligible');
+      return { valid: false, reasons };
     }
     // Min purchase
     if (parseFloat(discount.min_purchase_amount) > 0 && cartSubtotal < parseFloat(discount.min_purchase_amount)) {

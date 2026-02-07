@@ -434,7 +434,7 @@ class RetailerPlaceOrderView(APIView):
             applied_discount = None
 
             if discount_code:
-                today = timezone.now().date()
+                today = timezone.localtime().date()
                 try:
                     discount_rule = DiscountRule.objects.get(
                         code=discount_code,
@@ -576,7 +576,7 @@ class RetailerDiscountListView(APIView):
         if not retailer:
             return Response([], status=status.HTTP_200_OK)
 
-        today = timezone.now().date()
+        today = timezone.localtime().date()
 
         # Return ALL active discounts (don't filter by date/usage — let frontend show conditions)
         discounts = DiscountRule.objects.filter(
