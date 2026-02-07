@@ -315,12 +315,8 @@ class InvoicePayment(BaseModel):
         max_length=50,
         choices=[
             ('CASH', 'Cash'),
-            ('UPI', 'UPI'),
             ('BANK_TRANSFER', 'Bank Transfer'),
-            ('CARD', 'Card'),
-            ('CHEQUE', 'Cheque'),
             ('RAZORPAY', 'Razorpay (Online)'),
-            ('OTHER', 'Other'),
         ],
         default='CASH',
         help_text="Payment method"

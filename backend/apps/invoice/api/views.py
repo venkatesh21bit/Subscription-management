@@ -7,8 +7,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.conf import settings
 from decimal import Decimal
 from datetime import date
+import logging
 
 from core.permissions.base import RolePermission
 from apps.orders.models import SalesOrder
@@ -20,6 +22,8 @@ from apps.invoice.api.serializers import (
 from apps.invoice.selectors import list_outstanding_invoices, get_invoice
 from apps.invoice.services.invoice_generation_service import InvoiceGenerationService
 from core.services.posting import PostingService
+
+logger = logging.getLogger(__name__)
 
 
 def _reduce_product_stock(invoice):
@@ -362,3 +366,97 @@ class InvoiceRecordPaymentView(APIView):
                 'outstanding': float(invoice.grand_total - invoice.amount_received)
             }
         }, status=status.HTTP_201_CREATED)
+
+
+class CreateRazorpayOrderView(APIView):
+    """
+    Create a Razorpay order for online payment against an invoice.
+
+    POST /invoices/{id}/create-razorpay-order/
+    Body: { amount }
+
+    Returns Razorpay order_id and key for client-side checkout.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, invoice_id):
+        from apps.party.models import RetailerUser
+
+        # Allow both manufacturer and retailer access
+        retailer_party_ids = _get_retailer_party_ids(request.user)
+
+        try:
+            if retailer_party_ids:
+                invoice = Invoice.objects.get(id=invoice_id, party_id__in=retailer_party_ids)
+            else:
+                invoice = Invoice.objects.get(id=invoice_id, company=request.company)
+        except Invoice.DoesNotExist:
+            return Response({'error': 'Invoice not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if invoice.status in ['CANCELLED', 'PAID']:
+            return Response(
+                {'error': f'Cannot pay {invoice.status} invoice'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        amount = request.data.get('amount')
+        if not amount:
+            return Response({'error': 'Amount is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            amount = Decimal(str(amount))
+        except Exception:
+            return Response({'error': 'Invalid amount'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if amount <= 0:
+            return Response({'error': 'Amount must be positive'}, status=status.HTTP_400_BAD_REQUEST)
+
+        outstanding = invoice.grand_total - invoice.amount_received
+        if amount > outstanding:
+            return Response(
+                {'error': f'Amount {amount} exceeds outstanding balance {outstanding}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        razorpay_key_id = settings.RAZORPAY_KEY_ID
+        razorpay_key_secret = settings.RAZORPAY_KEY_SECRET
+
+        if not razorpay_key_id or not razorpay_key_secret:
+            return Response(
+                {'error': 'Razorpay is not configured. Please contact the company admin.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        try:
+            import razorpay
+            client = razorpay.Client(auth=(razorpay_key_id, razorpay_key_secret))
+
+            # Amount in paise (INR smallest unit)
+            amount_paise = int(amount * 100)
+
+            order_data = {
+                'amount': amount_paise,
+                'currency': 'INR',
+                'receipt': f'inv_{invoice.invoice_number}',
+                'notes': {
+                    'invoice_id': str(invoice.id),
+                    'invoice_number': invoice.invoice_number,
+                }
+            }
+
+            razorpay_order = client.order.create(data=order_data)
+
+            return Response({
+                'razorpay_order_id': razorpay_order['id'],
+                'razorpay_key': razorpay_key_id,
+                'amount': amount_paise,
+                'currency': 'INR',
+                'invoice_number': invoice.invoice_number,
+            })
+
+        except Exception as e:
+            logger.error(f"Razorpay order creation failed: {e}")
+            return Response(
+                {'error': 'Failed to create payment order. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

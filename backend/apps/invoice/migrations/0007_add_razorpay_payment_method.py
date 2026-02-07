@@ -14,12 +14,8 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 choices=[
                     ('CASH', 'Cash'),
-                    ('UPI', 'UPI'),
                     ('BANK_TRANSFER', 'Bank Transfer'),
-                    ('CARD', 'Card'),
-                    ('CHEQUE', 'Cheque'),
                     ('RAZORPAY', 'Razorpay (Online)'),
-                    ('OTHER', 'Other'),
                 ],
                 default='CASH',
                 help_text='Payment method',

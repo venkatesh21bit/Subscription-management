@@ -89,12 +89,8 @@ const typeColors: Record<string, string> = {
 
 const paymentMethodLabels: Record<string, string> = {
   CASH: 'Cash',
-  UPI: 'UPI',
   BANK_TRANSFER: 'Bank Transfer',
-  CARD: 'Card',
-  CHEQUE: 'Cheque',
   RAZORPAY: 'Razorpay (Online)',
-  OTHER: 'Other',
 };
 
 export default function RetailerBillDetailPage() {
@@ -804,11 +800,8 @@ export default function RetailerBillDetailPage() {
                         </SelectTrigger>
                         <SelectContent className="bg-neutral-800 border-neutral-700 text-white z-[100]">
                           <SelectItem value="CASH" className="text-white hover:bg-neutral-700 focus:bg-neutral-700 focus:text-white">Cash</SelectItem>
-                          <SelectItem value="UPI" className="text-white hover:bg-neutral-700 focus:bg-neutral-700 focus:text-white">UPI</SelectItem>
                           <SelectItem value="BANK_TRANSFER" className="text-white hover:bg-neutral-700 focus:bg-neutral-700 focus:text-white">Bank Transfer</SelectItem>
-                          <SelectItem value="CARD" className="text-white hover:bg-neutral-700 focus:bg-neutral-700 focus:text-white">Card</SelectItem>
-                          <SelectItem value="CHEQUE" className="text-white hover:bg-neutral-700 focus:bg-neutral-700 focus:text-white">Cheque</SelectItem>
-                          <SelectItem value="OTHER" className="text-white hover:bg-neutral-700 focus:bg-neutral-700 focus:text-white">Other</SelectItem>
+                          <SelectItem value="RAZORPAY" className="text-white hover:bg-neutral-700 focus:bg-neutral-700 focus:text-white">Pay Online (Razorpay)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -848,9 +841,21 @@ export default function RetailerBillDetailPage() {
                     </div>
 
                     <div className="flex gap-2 pt-2">
-                      <Button type="submit" className="flex-1" disabled={paymentSubmitting}>
-                        {paymentSubmitting ? 'Recording...' : 'Record Payment'}
-                      </Button>
+                      {paymentMethod === 'RAZORPAY' ? (
+                        <Button
+                          type="button"
+                          onClick={handleRazorpayPayment}
+                          disabled={razorpayLoading || !paymentAmount || parseFloat(paymentAmount) <= 0}
+                          className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                        >
+                          <Zap className="h-4 w-4 mr-2" />
+                          {razorpayLoading ? 'Processing...' : 'Pay Online (Razorpay)'}
+                        </Button>
+                      ) : (
+                        <Button type="submit" className="flex-1" disabled={paymentSubmitting}>
+                          {paymentSubmitting ? 'Recording...' : 'Record Payment'}
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant="outline"
@@ -861,22 +866,11 @@ export default function RetailerBillDetailPage() {
                       </Button>
                     </div>
 
-                    {/* Razorpay Online Payment */}
-                    <Separator className="bg-neutral-700" />
-                    <div className="pt-1">
-                      <Button
-                        type="button"
-                        onClick={handleRazorpayPayment}
-                        disabled={razorpayLoading || !paymentAmount || parseFloat(paymentAmount) <= 0}
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-                      >
-                        <Zap className="h-4 w-4 mr-2" />
-                        {razorpayLoading ? 'Processing...' : 'Pay Online (Razorpay)'}
-                      </Button>
-                      <p className="text-xs text-gray-500 mt-2 text-center">
+                    {paymentMethod === 'RAZORPAY' && (
+                      <p className="text-xs text-gray-500 text-center">
                         Pay securely via UPI, Cards, Netbanking, Wallets
                       </p>
-                    </div>
+                    )}
                   </form>
                 </CardContent>
               </Card>

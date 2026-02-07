@@ -11,6 +11,7 @@ from apps.invoice.api.views import (
     InvoiceDetailView,
     InvoiceConfirmView,
     InvoiceRecordPaymentView,
+    CreateRazorpayOrderView,
 )
 
 urlpatterns = [
@@ -25,6 +26,9 @@ urlpatterns = [
     
     # Record payment against invoice
     path('<uuid:invoice_id>/record-payment/', InvoiceRecordPaymentView.as_view(), name='invoice-record-payment'),
+    
+    # Create Razorpay order for online payment
+    path('<uuid:invoice_id>/create-razorpay-order/', CreateRazorpayOrderView.as_view(), name='invoice-create-razorpay-order'),
     
     # Outstanding invoices
     path('outstanding/', InvoiceOutstandingView.as_view(), name='invoice-outstanding'),
