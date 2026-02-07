@@ -138,13 +138,16 @@ def _check_company_access(company: Company, party: Party) -> None:
                 f"Party '{party.name}' is not registered as a retailer"
             )
         
-        access = RetailerCompanyAccess.objects.filter(
-            retailer=retailer_user,
-            company=company,
-            status='APPROVED'
-        ).exists()
+        # Check approval via RetailerUser.status OR RetailerCompanyAccess
+        is_approved = retailer_user.status == 'APPROVED'
+        if not is_approved:
+            is_approved = RetailerCompanyAccess.objects.filter(
+                retailer=retailer_user,
+                company=company,
+                status='APPROVED'
+            ).exists()
         
-        if not access:
+        if not is_approved:
             raise ValidationError(
                 f"Party '{party.name}' is not approved to place orders "
                 f"with company '{company.name}'"
