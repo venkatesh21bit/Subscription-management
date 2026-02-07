@@ -34,6 +34,37 @@ CORS_ALLOWED_ORIGINS = [
     # Add your production frontend URLs here
 ]
 
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-company-id',
+]
+
+CORS_EXPOSE_HEADERS = [
+    'content-type',
+    'x-csrftoken',
+]
+
+CORS_PREFLIGHT_MAX_AGE = 86400  # 24 hours
+
 CSRF_TRUSTED_ORIGINS = [
     "https://frontend-production-fbef1.up.railway.app",
     "https://backend-production-8d38.up.railway.app",
