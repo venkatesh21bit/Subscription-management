@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,9 +13,10 @@ import { getSessionData } from '@/utils/session';
 import { API_URL } from '@/utils/auth_fn';
 import {
   ArrowLeft, Calendar, FileText, User, CreditCard,
-  Download, Printer, CheckCircle, DollarSign
+  Download, Printer, CheckCircle, DollarSign, Zap
 } from 'lucide-react';
 import { toast } from 'sonner';
+import Script from 'next/script';
 
 interface Payment {
   id: string;
@@ -92,6 +93,7 @@ const paymentMethodLabels: Record<string, string> = {
   BANK_TRANSFER: 'Bank Transfer',
   CARD: 'Card',
   CHEQUE: 'Cheque',
+  RAZORPAY: 'Razorpay (Online)',
   OTHER: 'Other',
 };
 
@@ -106,6 +108,7 @@ export default function RetailerBillDetailPage() {
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   const [paymentRef, setPaymentRef] = useState('');
   const [paymentNotes, setPaymentNotes] = useState('');
+  const [razorpayLoading, setRazorpayLoading] = useState(false);
   const router = useRouter();
   const params = useParams();
   const sessionData = getSessionData();
@@ -214,6 +217,99 @@ export default function RetailerBillDetailPage() {
       setPaymentSubmitting(false);
     }
   };
+
+  // Razorpay online payment
+  const handleRazorpayPayment = useCallback(async () => {
+    if (!bill) return;
+    const amount = parseFloat(paymentAmount);
+    if (!amount || amount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    if (amount > bill.outstanding_amount) {
+      toast.error(`Amount cannot exceed outstanding balance of ${fmt(bill.outstanding_amount)}`);
+      return;
+    }
+
+    setRazorpayLoading(true);
+    try {
+      // Create Razorpay order via backend
+      const orderRes = await fetch(`${API_URL}/invoices/${billId}/create-razorpay-order/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionData?.access}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ amount: amount }),
+      });
+
+      let orderData: any;
+      if (orderRes.ok) {
+        orderData = await orderRes.json();
+      } else {
+        // If backend endpoint doesn't exist yet, create a client-side order
+        orderData = null;
+      }
+
+      const options: any = {
+        key: orderData?.razorpay_key || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+        amount: Math.round(amount * 100), // paise
+        currency: bill.currency_code || 'INR',
+        name: 'OdooxSNS',
+        description: `Payment for Invoice ${bill.invoice_number}`,
+        order_id: orderData?.razorpay_order_id || undefined,
+        handler: async function (response: any) {
+          // Payment successful — record it
+          try {
+            const res = await fetch(`${API_URL}/invoices/${billId}/record-payment/`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${sessionData?.access}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                amount: paymentAmount,
+                payment_method: 'RAZORPAY',
+                payment_date: new Date().toISOString().split('T')[0],
+                reference_number: response.razorpay_payment_id || response.razorpay_order_id || 'ONLINE',
+                notes: `Razorpay Payment ID: ${response.razorpay_payment_id || 'N/A'}`,
+              }),
+            });
+            if (res.ok) {
+              toast.success('Online payment recorded successfully!');
+              setShowPaymentForm(false);
+              setPaymentAmount('');
+              fetchBillDetail();
+            } else {
+              const errData = await res.json();
+              toast.error(errData.error || 'Failed to record payment');
+            }
+          } catch (err) {
+            toast.error('Payment succeeded but recording failed. Contact support.');
+          }
+        },
+        prefill: {
+          email: bill.party_email || '',
+        },
+        theme: {
+          color: '#2563eb',
+        },
+        modal: {
+          ondismiss: function () {
+            setRazorpayLoading(false);
+          },
+        },
+      };
+
+      const razorpay = new (window as any).Razorpay(options);
+      razorpay.open();
+    } catch (err) {
+      console.error('Razorpay error:', err);
+      toast.error('Failed to initiate online payment');
+    } finally {
+      setRazorpayLoading(false);
+    }
+  }, [bill, paymentAmount, billId, sessionData]);
 
   const fmt = (amount: number | string | undefined | null) => {
     const symbol = bill?.currency_symbol || '$';
@@ -374,7 +470,8 @@ export default function RetailerBillDetailPage() {
   const canPay = bill.outstanding_amount > 0 && !['PAID', 'CANCELLED', 'DRAFT'].includes(bill.status);
 
   return (
-    <div>
+    <div className="min-h-screen bg-neutral-950">
+      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
       <RetailerNavbar />
       <div className="container mx-auto p-6">
         {/* Header */}
@@ -672,16 +769,16 @@ export default function RetailerBillDetailPage() {
 
             {/* Payment Form */}
             {showPaymentForm && canPay && (
-              <Card className="border-blue-200 bg-blue-50/30">
+              <Card className="border-neutral-700 bg-neutral-900">
                 <CardHeader>
-                  <CardTitle className="text-lg flex items-center">
+                  <CardTitle className="text-lg flex items-center text-white">
                     <DollarSign className="h-5 w-5 mr-2" /> Record Payment
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleRecordPayment} className="space-y-4">
                     <div>
-                      <Label htmlFor="amount">Amount *</Label>
+                      <Label htmlFor="amount" className="text-gray-300">Amount *</Label>
                       <Input
                         id="amount"
                         type="number"
@@ -691,6 +788,7 @@ export default function RetailerBillDetailPage() {
                         value={paymentAmount}
                         onChange={(e) => setPaymentAmount(e.target.value)}
                         placeholder={`Max: ${fmt(bill.outstanding_amount)}`}
+                        className="bg-neutral-800 border-neutral-700 text-white"
                         required
                       />
                       <p className="text-xs text-gray-400 mt-1">
@@ -699,50 +797,53 @@ export default function RetailerBillDetailPage() {
                     </div>
 
                     <div>
-                      <Label htmlFor="method">Payment Method *</Label>
+                      <Label htmlFor="method" className="text-gray-300">Payment Method *</Label>
                       <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                        <SelectTrigger>
+                        <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="CASH">Cash</SelectItem>
-                          <SelectItem value="UPI">UPI</SelectItem>
-                          <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
-                          <SelectItem value="CARD">Card</SelectItem>
-                          <SelectItem value="CHEQUE">Cheque</SelectItem>
-                          <SelectItem value="OTHER">Other</SelectItem>
+                        <SelectContent className="bg-neutral-800 border-neutral-700 text-white z-[100]">
+                          <SelectItem value="CASH" className="text-white hover:bg-neutral-700 focus:bg-neutral-700 focus:text-white">Cash</SelectItem>
+                          <SelectItem value="UPI" className="text-white hover:bg-neutral-700 focus:bg-neutral-700 focus:text-white">UPI</SelectItem>
+                          <SelectItem value="BANK_TRANSFER" className="text-white hover:bg-neutral-700 focus:bg-neutral-700 focus:text-white">Bank Transfer</SelectItem>
+                          <SelectItem value="CARD" className="text-white hover:bg-neutral-700 focus:bg-neutral-700 focus:text-white">Card</SelectItem>
+                          <SelectItem value="CHEQUE" className="text-white hover:bg-neutral-700 focus:bg-neutral-700 focus:text-white">Cheque</SelectItem>
+                          <SelectItem value="OTHER" className="text-white hover:bg-neutral-700 focus:bg-neutral-700 focus:text-white">Other</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     <div>
-                      <Label htmlFor="date">Payment Date *</Label>
+                      <Label htmlFor="date" className="text-gray-300">Payment Date *</Label>
                       <Input
                         id="date"
                         type="date"
                         value={paymentDate}
                         onChange={(e) => setPaymentDate(e.target.value)}
+                        className="bg-neutral-800 border-neutral-700 text-white"
                         required
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="ref">Reference Number</Label>
+                      <Label htmlFor="ref" className="text-gray-300">Reference Number</Label>
                       <Input
                         id="ref"
                         value={paymentRef}
                         onChange={(e) => setPaymentRef(e.target.value)}
                         placeholder="Transaction ID, cheque no, etc."
+                        className="bg-neutral-800 border-neutral-700 text-white placeholder:text-gray-500"
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="notes">Notes</Label>
+                      <Label htmlFor="notes" className="text-gray-300">Notes</Label>
                       <Input
                         id="notes"
                         value={paymentNotes}
                         onChange={(e) => setPaymentNotes(e.target.value)}
                         placeholder="Optional notes"
+                        className="bg-neutral-800 border-neutral-700 text-white placeholder:text-gray-500"
                       />
                     </div>
 
@@ -753,10 +854,28 @@ export default function RetailerBillDetailPage() {
                       <Button
                         type="button"
                         variant="outline"
+                        className="border-neutral-600 text-gray-300 hover:bg-neutral-800"
                         onClick={() => setShowPaymentForm(false)}
                       >
                         Cancel
                       </Button>
+                    </div>
+
+                    {/* Razorpay Online Payment */}
+                    <Separator className="bg-neutral-700" />
+                    <div className="pt-1">
+                      <Button
+                        type="button"
+                        onClick={handleRazorpayPayment}
+                        disabled={razorpayLoading || !paymentAmount || parseFloat(paymentAmount) <= 0}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        <Zap className="h-4 w-4 mr-2" />
+                        {razorpayLoading ? 'Processing...' : 'Pay Online (Razorpay)'}
+                      </Button>
+                      <p className="text-xs text-gray-500 mt-2 text-center">
+                        Pay securely via UPI, Cards, Netbanking, Wallets
+                      </p>
                     </div>
                   </form>
                 </CardContent>

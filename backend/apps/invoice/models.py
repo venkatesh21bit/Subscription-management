@@ -319,6 +319,7 @@ class InvoicePayment(BaseModel):
             ('BANK_TRANSFER', 'Bank Transfer'),
             ('CARD', 'Card'),
             ('CHEQUE', 'Cheque'),
+            ('RAZORPAY', 'Razorpay (Online)'),
             ('OTHER', 'Other'),
         ],
         default='CASH',
