@@ -19,6 +19,7 @@ type UserRole = "MANUFACTURER" | "RETAILER";
 interface RoleSelectionResponse {
   access?: string;
   refresh?: string;
+  detail?: string;
 }
 
 interface ContextResponse {
@@ -45,12 +46,6 @@ const roleOptions = [
   },
 ];
 
-interface RoleSelectionResponse {
-  access?: string;
-  refresh?: string;
-  detail?: string;
-}
-
 const RoleSelectionPage = () => {
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -73,13 +68,12 @@ const RoleSelectionPage = () => {
       }
 
       // Store updated tokens from role selection response
-      const responseData = roleResponse.data as RoleSelectionResponse | null;
-      if (responseData) {
-        if (responseData.access) {
-          localStorage.setItem("access_token", responseData.access);
+      if (roleResponse.data) {
+        if (roleResponse.data.access) {
+          localStorage.setItem("access_token", roleResponse.data.access);
         }
-        if (responseData.refresh) {
-          localStorage.setItem("refresh_token", responseData.refresh);
+        if (roleResponse.data.refresh) {
+          localStorage.setItem("refresh_token", roleResponse.data.refresh);
         }
       }
 
