@@ -1,0 +1,12 @@
+[deploy]
+start=gunicorn main.wsgi --log-file -
+
+[env]
+DJANGO_SETTINGS_MODULE=main.settings
+PYTHONUNBUFFERED=1
+
+[build]
+install=python -m pip install -r requirements.txt
+
+[static]
+path=staticfiles

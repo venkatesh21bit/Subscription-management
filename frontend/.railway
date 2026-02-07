@@ -1,0 +1,11 @@
+[deploy]
+start=npm run build && npm run start
+
+[env]
+NODE_ENV=production
+
+[build]
+install=npm install
+
+[static]
+path=public
