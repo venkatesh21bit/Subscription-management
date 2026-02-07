@@ -313,6 +313,11 @@ class RetailerCompanyListView(APIView):
             if filter_status and ru.status != filter_status.upper():
                 continue
             
+            # Hide SUSPENDED and BLOCKED connections from retailer view
+            # Retailers should only see APPROVED and PENDING
+            if ru.status in ['SUSPENDED', 'BLOCKED']:
+                continue
+            
             # Get credit_limit from party if exists
             credit_limit = '0'
             payment_terms = 'Net 30 days'
