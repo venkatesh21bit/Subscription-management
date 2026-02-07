@@ -183,6 +183,20 @@ class SubscriptionInvoiceService:
             subscription.next_billing_date = subscription.calculate_next_billing_date()
             subscription.billing_cycle_count += 1
             subscription.save(update_fields=['last_billing_date', 'next_billing_date', 'billing_cycle_count'])
+
+            # Reduce product available_quantity for each invoice line
+            from apps.products.models import Product
+            for inv_line in InvoiceLine.objects.filter(invoice=invoice).select_related('item__product'):
+                if inv_line.item and inv_line.item.product_id:
+                    try:
+                        product = Product.objects.get(id=inv_line.item.product_id)
+                        qty = int(inv_line.quantity)
+                        product.available_quantity = max(0, product.available_quantity - qty)
+                        if product.available_quantity == 0 and product.status != 'discontinued':
+                            product.status = 'out_of_stock'
+                        product.save(update_fields=['available_quantity', 'status', 'updated_at'])
+                    except Product.DoesNotExist:
+                        pass
             
             return invoice
             

@@ -58,6 +58,7 @@ export default function NewProductPage() {
     tax: '',
     sales_price: '',
     cost: '',
+    available_quantity: '',
   });
   
   const [recurringPrices, setRecurringPrices] = useState<RecurringPrice[]>([]);
@@ -147,6 +148,7 @@ export default function NewProductPage() {
         tax_rate: parseFloat(formData.tax) || 0,
         price: parseFloat(formData.sales_price),
         cost: parseFloat(formData.cost),
+        available_quantity: parseInt(formData.available_quantity) || 0,
         recurring_prices: cleanRecurringPrices,
         variants: cleanVariants,
       };
@@ -300,6 +302,21 @@ export default function NewProductPage() {
               />
               {errors.cost && <p className="text-red-500 text-sm mt-1">{errors.cost}</p>}
             </div>
+          </div>
+
+          {/* Available Quantity */}
+          <div>
+            <Label htmlFor="available_quantity" className="text-gray-300">Available Quantity</Label>
+            <Input
+              id="available_quantity"
+              type="number"
+              step="1"
+              min="0"
+              value={formData.available_quantity}
+              onChange={(e) => handleInputChange('available_quantity', e.target.value)}
+              className="bg-gray-700 border-gray-600 text-white mt-1"
+              placeholder="0"
+            />
           </div>
         </div>
 

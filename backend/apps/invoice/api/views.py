@@ -22,6 +22,25 @@ from apps.invoice.services.invoice_generation_service import InvoiceGenerationSe
 from core.services.posting import PostingService
 
 
+def _reduce_product_stock(invoice):
+    """
+    Reduce product available_quantity for each invoice line.
+    Called when an invoice is confirmed/posted.
+    """
+    from apps.products.models import Product
+    for line in invoice.lines.select_related('item__product').all():
+        if line.item and line.item.product_id:
+            try:
+                product = Product.objects.get(id=line.item.product_id)
+                qty_to_reduce = int(line.quantity)
+                product.available_quantity = max(0, product.available_quantity - qty_to_reduce)
+                if product.available_quantity == 0 and product.status != 'discontinued':
+                    product.status = 'out_of_stock'
+                product.save(update_fields=['available_quantity', 'status', 'updated_at'])
+            except Product.DoesNotExist:
+                pass
+
+
 def _get_retailer_party_ids(user):
     """Get party IDs for a retailer user."""
     from apps.party.models import RetailerUser
@@ -105,6 +124,9 @@ class InvoicePostingView(APIView):
 
             invoice.status = 'POSTED'
             invoice.save(update_fields=['status'])
+
+            # Reduce product stock
+            _reduce_product_stock(invoice)
 
             return Response({
                 'voucher_id': str(posted_voucher.id),
@@ -239,6 +261,9 @@ class InvoiceConfirmView(APIView):
 
         invoice.status = 'POSTED'
         invoice.save(update_fields=['status'])
+
+        # Reduce product stock
+        _reduce_product_stock(invoice)
 
         serializer = InvoiceSerializer(invoice)
         return Response({
