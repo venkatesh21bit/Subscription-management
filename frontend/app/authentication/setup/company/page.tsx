@@ -16,7 +16,7 @@ import { useRouter } from "next/navigation";
 import { apiClient } from "@/utils/api";
 import { ChevronRight, ChevronLeft, Copy, Check } from "lucide-react";
 
-type Phase = "A" | "B" | "C";
+type Phase = "A" | "C";
 
 const COMPANY_TYPES = [
   "PRIVATE_LIMITED",
@@ -56,14 +56,6 @@ const CompanyOnboardingPage = () => {
   const [language, setLanguage] = useState("en");
   const [baseCurrencyId, setBaseCurrencyId] = useState("");
   const [currencies, setCurrencies] = useState<any[]>([]);
-
-  // Phase B - Business Settings
-  const [inventoryEnabled, setInventoryEnabled] = useState(true);
-  const [hrEnabled, setHrEnabled] = useState(false);
-  const [logisticsEnabled, setLogisticsEnabled] = useState(false);
-  const [workflowEnabled, setWorkflowEnabled] = useState(true);
-  const [portalEnabled, setPortalEnabled] = useState(false);
-  const [pricingEnabled, setPricingEnabled] = useState(true);
 
   // Phase C - Addresses
   const [addresses, setAddresses] = useState([
@@ -161,7 +153,8 @@ const CompanyOnboardingPage = () => {
 
       if (response.data) {
         setCompanyId(response.data.company?.id || response.data.id || "");
-        setPhase("B");
+        // Proceed directly to Phase C
+        setPhase("C");
       }
     } catch (err) {
       console.error("Company Creation Error:", err);
@@ -171,49 +164,9 @@ const CompanyOnboardingPage = () => {
     }
   };
 
-  const handleSaveBusinessSettings = async () => {
-    if (!companyId) {
-      setError("Company ID not found. Please go back and create the company first.");
-      return;
-    }
-
-    setIsLoading(true);
-    setError("");
-
-    try {
-      const payload = {
-        inventory_enabled: inventoryEnabled,
-        hr_enabled: hrEnabled,
-        logistics_enabled: logisticsEnabled,
-        workflow_enabled: workflowEnabled,
-        portal_enabled: portalEnabled,
-        pricing_enabled: pricingEnabled,
-      };
-
-      const response = await apiClient.put(
-        `/company/${companyId}/features/`,
-        payload
-      );
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      // Proceed to Phase C
-      setPhase("C");
-    } catch (err) {
-      console.error("Business Settings Error:", err);
-      setError(err instanceof Error ? err.message : "Failed to save business settings");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handlePreviousPhase = () => {
-    if (phase === "B") {
+    if (phase === "C") {
       setPhase("A");
-    } else if (phase === "C") {
-      setPhase("B");
     }
   };
 
@@ -286,7 +239,7 @@ const CompanyOnboardingPage = () => {
       localStorage.setItem("company_id", companyId);
       localStorage.removeItem("temp_user_email");
       localStorage.removeItem("temp_user_phone");
-      
+
       router.push("/manufacturer");
     } catch (err) {
       console.error("Address Save Error:", err);
@@ -305,20 +258,16 @@ const CompanyOnboardingPage = () => {
               <CardTitle className="text-2xl font-bold">
                 {phase === "A"
                   ? "Phase A: Company Basics"
-                  : phase === "B"
-                  ? "Phase B: Business Settings & Operations"
-                  : "Phase C: Locations"}
+                  : "Phase B: Locations"}
               </CardTitle>
               <CardDescription className="text-gray-400">
                 {phase === "A"
                   ? "Create your company"
-                  : phase === "B"
-                  ? "Configure business settings"
                   : "Add company addresses"}
               </CardDescription>
             </div>
             <div className="text-sm font-semibold text-blue-400">
-              Step {phase === "A" ? "1" : phase === "B" ? "2" : "3"} of 3
+              Step {phase === "A" ? "1" : "2"} of 2
             </div>
           </div>
           {/* Progress bar */}
@@ -326,7 +275,7 @@ const CompanyOnboardingPage = () => {
             <div
               className="bg-blue-600 h-2 rounded-full transition-all"
               style={{
-                width: phase === "A" ? "33%" : phase === "B" ? "66%" : "100%",
+                width: phase === "A" ? "50%" : "100%",
               }}
             ></div>
           </div>
@@ -464,107 +413,6 @@ const CompanyOnboardingPage = () => {
               </>
             )}
 
-            {/* Phase B - Business Settings */}
-            {phase === "B" && (
-              <>
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-blue-400 mb-4">Enable Features</h3>
-
-                  <div className="flex items-center justify-between p-3 bg-gray-800 rounded">
-                    <Label className="cursor-pointer">Inventory Management</Label>
-                    <Button
-                      type="button"
-                      className={cn(
-                        "w-16",
-                        inventoryEnabled
-                          ? "bg-green-600 hover:bg-green-700"
-                          : "bg-gray-600 hover:bg-gray-700"
-                      )}
-                      onClick={() => setInventoryEnabled(!inventoryEnabled)}
-                    >
-                      {inventoryEnabled ? "On" : "Off"}
-                    </Button>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-gray-800 rounded">
-                    <Label className="cursor-pointer">HR Management</Label>
-                    <Button
-                      type="button"
-                      className={cn(
-                        "w-16",
-                        hrEnabled ? "bg-green-600 hover:bg-green-700" : "bg-gray-600 hover:bg-gray-700"
-                      )}
-                      onClick={() => setHrEnabled(!hrEnabled)}
-                    >
-                      {hrEnabled ? "On" : "Off"}
-                    </Button>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-gray-800 rounded">
-                    <Label className="cursor-pointer">Logistics</Label>
-                    <Button
-                      type="button"
-                      className={cn(
-                        "w-16",
-                        logisticsEnabled
-                          ? "bg-green-600 hover:bg-green-700"
-                          : "bg-gray-600 hover:bg-gray-700"
-                      )}
-                      onClick={() => setLogisticsEnabled(!logisticsEnabled)}
-                    >
-                      {logisticsEnabled ? "On" : "Off"}
-                    </Button>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-gray-800 rounded">
-                    <Label className="cursor-pointer">Workflow</Label>
-                    <Button
-                      type="button"
-                      className={cn(
-                        "w-16",
-                        workflowEnabled
-                          ? "bg-green-600 hover:bg-green-700"
-                          : "bg-gray-600 hover:bg-gray-700"
-                      )}
-                      onClick={() => setWorkflowEnabled(!workflowEnabled)}
-                    >
-                      {workflowEnabled ? "On" : "Off"}
-                    </Button>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-gray-800 rounded">
-                    <Label className="cursor-pointer">Portal</Label>
-                    <Button
-                      type="button"
-                      className={cn(
-                        "w-16",
-                        portalEnabled ? "bg-green-600 hover:bg-green-700" : "bg-gray-600 hover:bg-gray-700"
-                      )}
-                      onClick={() => setPortalEnabled(!portalEnabled)}
-                    >
-                      {portalEnabled ? "On" : "Off"}
-                    </Button>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-gray-800 rounded">
-                    <Label className="cursor-pointer">Pricing</Label>
-                    <Button
-                      type="button"
-                      className={cn(
-                        "w-16",
-                        pricingEnabled
-                          ? "bg-green-600 hover:bg-green-700"
-                          : "bg-gray-600 hover:bg-gray-700"
-                      )}
-                      onClick={() => setPricingEnabled(!pricingEnabled)}
-                    >
-                      {pricingEnabled ? "On" : "Off"}
-                    </Button>
-                  </div>
-                </div>
-              </>
-            )}
-
             {/* Phase C - Addresses */}
             {phase === "C" && (
               <>
@@ -690,18 +538,6 @@ const CompanyOnboardingPage = () => {
                   disabled={isLoading}
                 >
                   {isLoading ? "Creating Company..." : "Create Company"}
-                </Button>
-              )}
-
-              {phase === "B" && (
-                <Button
-                  type="button"
-                  onClick={handleSaveBusinessSettings}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Saving..." : "Next"}
-                  {!isLoading && <ChevronRight className="w-4 h-4 ml-2" />}
                 </Button>
               )}
 
