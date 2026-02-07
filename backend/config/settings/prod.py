@@ -18,9 +18,12 @@ DATABASES = {
     'default': dj_database_url.config(
         default=os.environ.get('DATABASE_URL'),
         conn_max_age=600,
-        ssl_require=True
+        conn_health_checks=True,
     )
 }
+
+# SSL is handled by Railway automatically, don't force SSL requirement
+# If using external database, uncomment and set ssl_require=True
 
 # CORS Configuration for production
 CORS_ALLOWED_ORIGINS = [
@@ -37,7 +40,9 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # Security Settings
-SECURE_SSL_REDIRECT = True
+# Railway handles SSL/HTTPS at the proxy level
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'False') == 'True'
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SECURE_BROWSER_XSS_FILTER = True

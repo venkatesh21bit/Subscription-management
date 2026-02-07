@@ -9,6 +9,8 @@ import { getSessionData } from '@/utils/session';
 import { ArrowLeft, Calendar, FileText, User, CreditCard, Download, Printer } from 'lucide-react';
 import Link from 'next/link';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+
 interface BillDetail {
   id: string;
   invoice_number: string;

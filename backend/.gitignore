@@ -87,3 +87,8 @@ local_settings.py
 
 .env
 db.sqlite3
+
+# Static files collected by collectstatic
+staticfiles/
+static_root/
+media/
