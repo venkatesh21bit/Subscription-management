@@ -135,6 +135,9 @@ class SubscriptionListSerializer(serializers.ModelSerializer):
     monthly = serializers.DecimalField(source='monthly_value', max_digits=14, decimal_places=2, read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     
+    # Invoice tracking
+    last_billing_date = serializers.DateField(read_only=True)
+    
     class Meta:
         model = Subscription
         fields = [
@@ -151,7 +154,8 @@ class SubscriptionListSerializer(serializers.ModelSerializer):
             'status',
             'status_display',
             'start_date',
-            'created_at'
+            'created_at',
+            'last_billing_date',
         ]
         read_only_fields = ['id', 'company_id', 'subscription_number', 'created_at']
     

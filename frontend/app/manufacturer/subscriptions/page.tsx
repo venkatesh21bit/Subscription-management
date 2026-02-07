@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Search, Plus, Trash2, Receipt, Send } from "lucide-react"
+import { Search, Plus, Trash2, Receipt, Send, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -33,6 +33,7 @@ type Subscription = {
     status_display: string;
     start_date: string;
     created_at: string;
+    last_billing_date: string | null;
 }
 
 // Helper function to get badge variant based on status
@@ -315,19 +316,31 @@ export default function SubscriptionsPage() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="gap-1"
-                                            onClick={() => handleSendInvoice(subscription.id)}
-                                            disabled={
-                                                sendingInvoice === subscription.id || 
-                                                (subscription.status !== 'ACTIVE' && subscription.status !== 'CONFIRMED')
-                                            }
-                                        >
-                                            <Send className="h-3 w-3" />
-                                            {sendingInvoice === subscription.id ? 'Sending...' : 'Send Invoice'}
-                                        </Button>
+                                        {subscription.last_billing_date ? (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="gap-1 opacity-60 cursor-default"
+                                                disabled
+                                            >
+                                                <CheckCircle className="h-3 w-3 text-green-500" />
+                                                Sent
+                                            </Button>
+                                        ) : (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="gap-1"
+                                                onClick={() => handleSendInvoice(subscription.id)}
+                                                disabled={
+                                                    sendingInvoice === subscription.id || 
+                                                    (subscription.status !== 'ACTIVE' && subscription.status !== 'CONFIRMED')
+                                                }
+                                            >
+                                                <Send className="h-3 w-3" />
+                                                {sendingInvoice === subscription.id ? 'Sending...' : 'Send Invoice'}
+                                            </Button>
+                                        )}
                                     </TableCell>
                                 </TableRow>
                             ))
