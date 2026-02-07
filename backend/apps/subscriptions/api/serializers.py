@@ -137,6 +137,10 @@ class SubscriptionListSerializer(serializers.ModelSerializer):
     
     # Invoice tracking
     last_billing_date = serializers.DateField(read_only=True)
+    next_billing_date = serializers.DateField(read_only=True)
+    billing_interval = serializers.CharField(source='plan.billing_interval', read_only=True)
+    billing_interval_display = serializers.CharField(source='plan.get_billing_interval_display', read_only=True)
+    billing_cycle_count = serializers.IntegerField(read_only=True)
     
     class Meta:
         model = Subscription
@@ -156,6 +160,10 @@ class SubscriptionListSerializer(serializers.ModelSerializer):
             'start_date',
             'created_at',
             'last_billing_date',
+            'next_billing_date',
+            'billing_interval',
+            'billing_interval_display',
+            'billing_cycle_count',
         ]
         read_only_fields = ['id', 'company_id', 'subscription_number', 'created_at']
     

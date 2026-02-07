@@ -36,6 +36,7 @@ urlpatterns = [
     
     # Subscription billing: Generate invoices
     path('subscriptions/<uuid:subscription_id>/generate-invoice/', views.SubscriptionGenerateInvoiceView.as_view(), name='subscription-generate-invoice'),
+    path('subscriptions/<uuid:subscription_id>/simulate-recurring/', views.SubscriptionSimulateRecurringView.as_view(), name='subscription-simulate-recurring'),
     path('subscriptions/bulk-billing/', views.SubscriptionBulkBillingView.as_view(), name='subscription-bulk-billing'),
     
     # Order workflow: Create invoice from order

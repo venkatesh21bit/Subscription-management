@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Search, Plus, Trash2, Receipt, Send, CheckCircle } from "lucide-react"
+import { Search, Plus, Trash2, Receipt, Send, CheckCircle, Play, Clock, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -34,6 +34,30 @@ type Subscription = {
     start_date: string;
     created_at: string;
     last_billing_date: string | null;
+    next_billing_date: string | null;
+    billing_interval: string | null;
+    billing_interval_display: string | null;
+    billing_cycle_count: number;
+}
+
+type SimulationResult = {
+    success: boolean;
+    message: string;
+    invoice?: {
+        invoice_number: string;
+        total_amount: number;
+        currency: string;
+    };
+    check: {
+        billing_interval_display: string;
+        next_billing_date: string;
+        is_due: boolean;
+        days_overdue: number;
+        days_remaining: number;
+        cycles_completed: number;
+        new_next_billing_date?: string;
+        new_cycles_completed?: number;
+    };
 }
 
 // Helper function to get badge variant based on status
@@ -73,6 +97,9 @@ export default function SubscriptionsPage() {
     const [error, setError] = useState<string | null>(null)
     const [sendingInvoice, setSendingInvoice] = useState<string | null>(null)
     const [bulkBilling, setBulkBilling] = useState(false)
+    const [simulatingId, setSimulatingId] = useState<string | null>(null)
+    const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null)
+    const [showSimResult, setShowSimResult] = useState(false)
 
     // Fetch subscriptions from API
     const fetchSubscriptions = async () => {
@@ -158,6 +185,40 @@ export default function SubscriptionsPage() {
             console.error('Error processing bulk billing:', err)
         } finally {
             setBulkBilling(false)
+        }
+    }
+
+    // Simulate recurring payment
+    const handleSimulateRecurring = async (subscriptionId: string) => {
+        try {
+            setSimulatingId(subscriptionId)
+            setSimulationResult(null)
+            
+            const response = await api<SimulationResult>(
+                `/subscriptions/subscriptions/${subscriptionId}/simulate-recurring/`,
+                { 
+                    method: 'POST',
+                    body: JSON.stringify({ force: true })
+                }
+            )
+            
+            if (response.data) {
+                setSimulationResult(response.data)
+                setShowSimResult(true)
+                if (response.data.success) {
+                    toast.success(response.data.message)
+                    fetchSubscriptions()
+                } else {
+                    toast.info(response.data.message)
+                }
+            } else if (response.error) {
+                toast.error(response.error)
+            }
+        } catch (err) {
+            toast.error('Failed to simulate recurring payment')
+            console.error('Error simulating recurring:', err)
+        } finally {
+            setSimulatingId(null)
         }
     }
 
@@ -269,19 +330,20 @@ export default function SubscriptionsPage() {
                             <TableHead>Recurring</TableHead>
                             <TableHead>Plan</TableHead>
                             <TableHead>Status</TableHead>
-                            <TableHead className="w-[120px]">Actions</TableHead>
+                            <TableHead>Next Billing</TableHead>
+                            <TableHead className="w-[240px]">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                                <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                                     Loading subscriptions...
                                 </TableCell>
                             </TableRow>
                         ) : error ? (
                             <TableRow>
-                                <TableCell colSpan={8} className="text-center py-8 text-red-500">
+                                <TableCell colSpan={9} className="text-center py-8 text-red-500">
                                     Error: {error}
                                     <Button 
                                         variant="outline" 
@@ -316,37 +378,67 @@ export default function SubscriptionsPage() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell>
-                                        {subscription.last_billing_date ? (
+                                        <div className="text-xs">
+                                            {subscription.next_billing_date ? (
+                                                <>
+                                                    <div className="font-medium">{formatDate(subscription.next_billing_date)}</div>
+                                                    <div className="text-muted-foreground">
+                                                        {subscription.billing_interval_display} · Cycle #{subscription.billing_cycle_count}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <span className="text-muted-foreground">—</span>
+                                            )}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex gap-1">
+                                            {subscription.last_billing_date ? (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="gap-1 opacity-60 cursor-default"
+                                                    disabled
+                                                >
+                                                    <CheckCircle className="h-3 w-3 text-green-500" />
+                                                    Sent
+                                                </Button>
+                                            ) : (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="gap-1"
+                                                    onClick={() => handleSendInvoice(subscription.id)}
+                                                    disabled={
+                                                        sendingInvoice === subscription.id || 
+                                                        (subscription.status !== 'ACTIVE' && subscription.status !== 'CONFIRMED')
+                                                    }
+                                                >
+                                                    <Send className="h-3 w-3" />
+                                                    {sendingInvoice === subscription.id ? 'Sending...' : 'Send Invoice'}
+                                                </Button>
+                                            )}
                                             <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="gap-1 opacity-60 cursor-default"
-                                                disabled
-                                            >
-                                                <CheckCircle className="h-3 w-3 text-green-500" />
-                                                Sent
-                                            </Button>
-                                        ) : (
-                                            <Button
-                                                variant="outline"
+                                                variant="secondary"
                                                 size="sm"
                                                 className="gap-1"
-                                                onClick={() => handleSendInvoice(subscription.id)}
+                                                onClick={() => handleSimulateRecurring(subscription.id)}
                                                 disabled={
-                                                    sendingInvoice === subscription.id || 
+                                                    simulatingId === subscription.id ||
                                                     (subscription.status !== 'ACTIVE' && subscription.status !== 'CONFIRMED')
                                                 }
+                                                title="Simulate recurring payment (fast-forward billing cycle)"
                                             >
-                                                <Send className="h-3 w-3" />
-                                                {sendingInvoice === subscription.id ? 'Sending...' : 'Send Invoice'}
+                                                <Zap className="h-3 w-3" />
+                                                {simulatingId === subscription.id ? 'Simulating...' : 'Simulate'}
                                             </Button>
-                                        )}
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                                <TableCell colSpan={9} className="text-center py-8 text-gray-500">
                                     No subscriptions found.
                                 </TableCell>
                             </TableRow>
@@ -359,6 +451,64 @@ export default function SubscriptionsPage() {
             {!loading && !error && (
                 <div className="mt-4 text-sm text-gray-600">
                     Showing {filteredSubscriptions.length} of {subscriptions.length} subscriptions
+                </div>
+            )}
+
+            {/* Simulation Result Dialog */}
+            {showSimResult && simulationResult && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowSimResult(false)}>
+                    <div className="bg-background border rounded-lg shadow-xl p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                            <Zap className="h-5 w-5" />
+                            Recurring Payment Simulation
+                        </h3>
+                        
+                        <div className={`rounded-md p-3 mb-4 text-sm ${
+                            simulationResult.success 
+                                ? 'bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20'
+                                : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/20'
+                        }`}>
+                            {simulationResult.message}
+                        </div>
+                        
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Billing Interval:</span>
+                                <span className="font-medium">{simulationResult.check.billing_interval_display}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Was Due:</span>
+                                <span className="font-medium">{simulationResult.check.is_due ? `Yes (${simulationResult.check.days_overdue} days overdue)` : `No (${simulationResult.check.days_remaining} days remaining)`}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Cycles Completed:</span>
+                                <span className="font-medium">{simulationResult.check.new_cycles_completed ?? simulationResult.check.cycles_completed}</span>
+                            </div>
+                            {simulationResult.check.new_next_billing_date && (
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Next Billing:</span>
+                                    <span className="font-medium">{formatDate(simulationResult.check.new_next_billing_date)}</span>
+                                </div>
+                            )}
+                            {simulationResult.invoice && (
+                                <>
+                                    <hr className="my-2" />
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Invoice:</span>
+                                        <span className="font-medium">{simulationResult.invoice.invoice_number}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Amount:</span>
+                                        <span className="font-medium">{simulationResult.invoice.currency} {simulationResult.invoice.total_amount}</span>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                        
+                        <Button className="w-full mt-4" onClick={() => setShowSimResult(false)}>
+                            Close
+                        </Button>
+                    </div>
                 </div>
             )}
         </div>

@@ -1281,6 +1281,94 @@ class SubscriptionGenerateInvoiceView(APIView):
             )
 
 
+class SubscriptionSimulateRecurringView(APIView):
+    """
+    Simulate a recurring payment for a subscription.
+    
+    Checks if billing is due based on the plan's billing interval and next_billing_date.
+    If force=true, fast-forwards the billing date to today so the payment triggers immediately.
+    
+    POST /subscriptions/{id}/simulate-recurring/
+    Body: { "force": true }
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, subscription_id):
+        try:
+            subscription = Subscription.objects.select_related('plan', 'party', 'currency').get(
+                id=subscription_id,
+                company=request.company,
+            )
+        except Subscription.DoesNotExist:
+            return Response({'error': 'Subscription not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        if subscription.status not in ('ACTIVE', 'CONFIRMED'):
+            return Response(
+                {'error': f'Cannot simulate billing for status: {subscription.get_status_display()}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        force = request.data.get('force', False)
+        today = timezone.now().date()
+        next_date = subscription.next_billing_date
+        interval = subscription.plan.billing_interval
+        interval_display = subscription.plan.get_billing_interval_display()
+        is_due = next_date <= today
+        days_overdue = (today - next_date).days if is_due else 0
+        days_remaining = (next_date - today).days if not is_due else 0
+        
+        # Build check info returned in every response
+        check = {
+            'billing_interval': interval,
+            'billing_interval_display': interval_display,
+            'next_billing_date': next_date.isoformat(),
+            'last_billing_date': subscription.last_billing_date.isoformat() if subscription.last_billing_date else None,
+            'is_due': is_due,
+            'days_overdue': days_overdue,
+            'days_remaining': days_remaining,
+            'cycles_completed': subscription.billing_cycle_count,
+        }
+        
+        # If not due and not forced, return check only
+        if not is_due and not force:
+            return Response({
+                'success': False,
+                'message': f'Not yet due. Next billing in {days_remaining} day(s) on {next_date.isoformat()}',
+                'check': check,
+            })
+        
+        # Fast-forward if forced and not naturally due
+        if force and not is_due:
+            subscription.next_billing_date = today
+            subscription.save(update_fields=['next_billing_date'])
+        
+        # Generate invoice
+        from apps.subscriptions.services.invoice_service import SubscriptionInvoiceService
+        result = SubscriptionInvoiceService.send_invoice_to_retailer(subscription, auto_post=True)
+        
+        # Refresh from DB after billing service updates fields
+        subscription.refresh_from_db()
+        
+        check['new_next_billing_date'] = subscription.next_billing_date.isoformat()
+        check['new_last_billing_date'] = subscription.last_billing_date.isoformat() if subscription.last_billing_date else None
+        check['new_cycles_completed'] = subscription.billing_cycle_count
+        
+        if result['success']:
+            return Response({
+                'success': True,
+                'message': f"Recurring {interval_display.lower()} payment simulated successfully. "
+                           f"Invoice {result['invoice']['invoice_number']} created.",
+                'invoice': result['invoice'],
+                'check': check,
+            }, status=status.HTTP_201_CREATED)
+        else:
+            return Response({
+                'success': False,
+                'message': result['message'],
+                'check': check,
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
 class SubscriptionBulkBillingView(APIView):
     """
     Process bulk billing for all due subscriptions.
