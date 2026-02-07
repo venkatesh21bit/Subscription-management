@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { RetailerNavbar } from '@/components/retailer/nav_bar';
 import { apiClient } from '@/utils/api';
 import { PaginatedResponse } from '@/types/api';
-import { ShoppingCart, Search, Filter, Package, Plus, Minus, Tag, X, Check, AlertCircle } from 'lucide-react';
+import { ShoppingCart, Search, Filter, Package, Plus, Minus, Tag, X, AlertCircle } from 'lucide-react';
 
 interface ProductVariant {
   id: string;
@@ -58,10 +58,12 @@ interface Discount {
   discount_value: string;
   min_purchase_amount: string;
   min_quantity: number;
-  start_date: string;
-  end_date: string;
+  start_date: string | null;
+  end_date: string | null;
   remaining_usage: number | null;
   applicable_product_ids: string[];
+  eligible: boolean;
+  reasons: string[];
 }
 
 const BrowseProductsPage = () => {
@@ -94,7 +96,6 @@ const BrowseProductsPage = () => {
   const [availableDiscounts, setAvailableDiscounts] = useState<Discount[]>([]);
   const [appliedDiscount, setAppliedDiscount] = useState<Discount | null>(null);
   const [discountError, setDiscountError] = useState('');
-  const [showDiscounts, setShowDiscounts] = useState(false);
 
   useEffect(() => {
     fetchCompanies();
@@ -159,40 +160,44 @@ const BrowseProductsPage = () => {
   }, [cartSubtotal, discountAmount]);
 
   // Validate discount conditions against current cart
-  const validateDiscount = (discount: Discount): { valid: boolean; reason: string } => {
+  const validateDiscount = (discount: Discount): { valid: boolean; reasons: string[] } => {
+    const reasons: string[] = [];
+    // Backend eligibility (date range, usage limits, product applicability flag)
+    if (!discount.eligible) {
+      return { valid: false, reasons: discount.reasons || ['Not eligible'] };
+    }
     // Min purchase
     if (parseFloat(discount.min_purchase_amount) > 0 && cartSubtotal < parseFloat(discount.min_purchase_amount)) {
-      return { valid: false, reason: `Min purchase ₹${parseFloat(discount.min_purchase_amount).toFixed(0)} required (current: ₹${cartSubtotal.toFixed(0)})` };
+      reasons.push(`Min purchase ₹${parseFloat(discount.min_purchase_amount).toFixed(0)} required (current: ₹${cartSubtotal.toFixed(0)})`);
     }
     // Min quantity
     if (discount.min_quantity > 0 && cartTotalQty < discount.min_quantity) {
-      return { valid: false, reason: `Min ${discount.min_quantity} items required (current: ${cartTotalQty})` };
+      reasons.push(`Min ${discount.min_quantity} items required (current: ${cartTotalQty})`);
     }
     // Product applicability
     if (discount.applicable_product_ids.length > 0) {
       const cartProductIds = cart.map(item => item.product.id);
       const hasApplicable = cartProductIds.some(pid => discount.applicable_product_ids.includes(pid));
       if (!hasApplicable) {
-        return { valid: false, reason: 'Does not apply to products in your cart' };
+        reasons.push('Does not apply to products in your cart');
       }
     }
     // Usage limit
     if (discount.remaining_usage !== null && discount.remaining_usage <= 0) {
-      return { valid: false, reason: 'Usage limit reached' };
+      reasons.push('Usage limit reached');
     }
-    return { valid: true, reason: '' };
+    return { valid: reasons.length === 0, reasons };
   };
 
   const applyDiscount = (discount: Discount) => {
     const validation = validateDiscount(discount);
     if (!validation.valid) {
-      setDiscountError(validation.reason);
+      setDiscountError(validation.reasons.join('. '));
       setTimeout(() => setDiscountError(''), 3000);
       return;
     }
     setAppliedDiscount(discount);
     setDiscountError('');
-    setShowDiscounts(false);
   };
 
   const removeDiscount = () => {
@@ -660,102 +665,117 @@ const BrowseProductsPage = () => {
                         <p className="text-sm text-green-400 mt-1 text-right">-₹{discountAmount.toFixed(2)}</p>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => setShowDiscounts(!showDiscounts)}
-                        className="w-full flex items-center justify-between bg-neutral-800 border border-neutral-700 rounded-lg p-3 text-sm text-neutral-300 hover:border-blue-500 transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Tag className="h-4 w-4" />
-                          <span>Apply Discount</span>
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Tag className="h-4 w-4 text-neutral-400" />
+                          <span className="text-sm font-medium text-neutral-300">Available Discounts</span>
+                          <span className="text-xs text-neutral-500">({availableDiscounts.length})</span>
                         </div>
-                        <span className="text-xs text-neutral-500">
-                          {availableDiscounts.length > 0 ? `${availableDiscounts.length} available` : 'No discounts'}
-                        </span>
-                      </button>
+                        <div className="bg-neutral-800 border border-neutral-700 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+                          {availableDiscounts.length === 0 ? (
+                            <p className="p-3 text-sm text-neutral-500 text-center">No discounts available for this company</p>
+                          ) : (
+                            availableDiscounts.map((discount) => {
+                              const validation = validateDiscount(discount);
+                              return (
+                                <div
+                                  key={discount.id}
+                                  className={`p-3 border-b border-neutral-700 last:border-b-0 ${
+                                    validation.valid ? 'hover:bg-neutral-700/50' : ''
+                                  }`}
+                                >
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium text-white">{discount.name}</p>
+                                      <p className="text-xs text-blue-400 mt-0.5">
+                                        {discount.discount_type === 'PERCENTAGE'
+                                          ? `${discount.discount_value}% off`
+                                          : `₹${parseFloat(discount.discount_value).toFixed(2)} off`}
+                                        <span className="text-neutral-500 ml-1">({discount.code})</span>
+                                      </p>
+                                      {discount.description && (
+                                        <p className="text-xs text-neutral-500 mt-0.5">{discount.description}</p>
+                                      )}
+                                    </div>
+                                    <button
+                                      onClick={() => applyDiscount(discount)}
+                                      disabled={!validation.valid}
+                                      className={`ml-2 px-3 py-1 text-xs rounded font-medium flex-shrink-0 ${
+                                        validation.valid
+                                          ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                                          : 'bg-neutral-700 text-neutral-500 cursor-not-allowed'
+                                      }`}
+                                    >
+                                      {validation.valid ? 'Apply' : 'Ineligible'}
+                                    </button>
+                                  </div>
+                                  {/* Conditions */}
+                                  <div className="mt-2 flex flex-wrap gap-1">
+                                    {discount.start_date && discount.end_date && (
+                                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                        discount.eligible
+                                          ? 'bg-green-900/40 text-green-400'
+                                          : discount.reasons.some(r => r.toLowerCase().includes('start') || r.toLowerCase().includes('expir'))
+                                            ? 'bg-red-900/40 text-red-400'
+                                            : 'bg-neutral-700 text-neutral-400'
+                                      }`}>
+                                        {new Date(discount.start_date).toLocaleDateString()} – {new Date(discount.end_date).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                    {parseFloat(discount.min_purchase_amount) > 0 && (
+                                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                        cartSubtotal >= parseFloat(discount.min_purchase_amount)
+                                          ? 'bg-green-900/40 text-green-400'
+                                          : 'bg-red-900/40 text-red-400'
+                                      }`}>
+                                        Min ₹{parseFloat(discount.min_purchase_amount).toFixed(0)}
+                                      </span>
+                                    )}
+                                    {discount.min_quantity > 0 && (
+                                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                        cartTotalQty >= discount.min_quantity
+                                          ? 'bg-green-900/40 text-green-400'
+                                          : 'bg-red-900/40 text-red-400'
+                                      }`}>
+                                        Min {discount.min_quantity} items
+                                      </span>
+                                    )}
+                                    {discount.remaining_usage !== null && (
+                                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                        discount.remaining_usage > 0 ? 'bg-neutral-700 text-neutral-400' : 'bg-red-900/40 text-red-400'
+                                      }`}>
+                                        {discount.remaining_usage > 0 ? `${discount.remaining_usage} uses left` : 'No uses left'}
+                                      </span>
+                                    )}
+                                    {discount.applicable_product_ids.length > 0 && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-700 text-neutral-400">
+                                        Specific products only
+                                      </span>
+                                    )}
+                                  </div>
+                                  {/* Ineligibility reasons */}
+                                  {!validation.valid && validation.reasons.length > 0 && (
+                                    <div className="mt-1.5">
+                                      {validation.reasons.map((reason, idx) => (
+                                        <p key={idx} className="text-[10px] text-yellow-500 flex items-center gap-1">
+                                          <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                                          {reason}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
                     )}
 
                     {discountError && (
                       <div className="mt-2 flex items-center gap-2 text-xs text-red-400 bg-red-900/20 rounded p-2">
                         <AlertCircle className="h-3 w-3 flex-shrink-0" />
                         {discountError}
-                      </div>
-                    )}
-
-                    {/* Discount list dropdown */}
-                    {showDiscounts && !appliedDiscount && (
-                      <div className="mt-2 bg-neutral-800 border border-neutral-700 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
-                        {availableDiscounts.length === 0 ? (
-                          <p className="p-3 text-sm text-neutral-500 text-center">No discounts available</p>
-                        ) : (
-                          availableDiscounts.map((discount) => {
-                            const validation = validateDiscount(discount);
-                            return (
-                              <div
-                                key={discount.id}
-                                className={`p-3 border-b border-neutral-700 last:border-b-0 ${
-                                  validation.valid ? 'hover:bg-neutral-700 cursor-pointer' : 'opacity-60'
-                                }`}
-                                onClick={() => validation.valid && applyDiscount(discount)}
-                              >
-                                <div className="flex justify-between items-start">
-                                  <div className="flex-1">
-                                    <p className="text-sm font-medium text-white">{discount.name}</p>
-                                    <p className="text-xs text-neutral-400 mt-0.5">
-                                      {discount.discount_type === 'PERCENTAGE'
-                                        ? `${discount.discount_value}% off`
-                                        : `₹${parseFloat(discount.discount_value).toFixed(2)} off`}
-                                    </p>
-                                    {discount.description && (
-                                      <p className="text-xs text-neutral-500 mt-0.5">{discount.description}</p>
-                                    )}
-                                  </div>
-                                  {validation.valid ? (
-                                    <Check className="h-4 w-4 text-green-400 mt-0.5 flex-shrink-0" />
-                                  ) : (
-                                    <AlertCircle className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
-                                  )}
-                                </div>
-                                {/* Conditions */}
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                  {parseFloat(discount.min_purchase_amount) > 0 && (
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                                      cartSubtotal >= parseFloat(discount.min_purchase_amount)
-                                        ? 'bg-green-900/40 text-green-400'
-                                        : 'bg-red-900/40 text-red-400'
-                                    }`}>
-                                      Min ₹{parseFloat(discount.min_purchase_amount).toFixed(0)}
-                                    </span>
-                                  )}
-                                  {discount.min_quantity > 0 && (
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                                      cartTotalQty >= discount.min_quantity
-                                        ? 'bg-green-900/40 text-green-400'
-                                        : 'bg-red-900/40 text-red-400'
-                                    }`}>
-                                      Min {discount.min_quantity} items
-                                    </span>
-                                  )}
-                                  {discount.remaining_usage !== null && (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-700 text-neutral-400">
-                                      {discount.remaining_usage} uses left
-                                    </span>
-                                  )}
-                                  {discount.applicable_product_ids.length > 0 && (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-700 text-neutral-400">
-                                      Specific products
-                                    </span>
-                                  )}
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-700 text-neutral-400">
-                                    Until {new Date(discount.end_date).toLocaleDateString()}
-                                  </span>
-                                </div>
-                                {!validation.valid && (
-                                  <p className="text-[10px] text-yellow-500 mt-1">{validation.reason}</p>
-                                )}
-                              </div>
-                            );
-                          })
-                        )}
                       </div>
                     )}
                   </div>

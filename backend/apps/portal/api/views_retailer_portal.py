@@ -557,8 +557,9 @@ class RetailerDiscountListView(APIView):
 
     GET /portal/discounts/?company_id=<uuid>
 
-    Returns active, currently-valid discount rules the retailer can use.
-    Each discount includes whether the retailer has remaining usage.
+    Returns all active discount rules for the company.
+    Each discount includes eligibility status and conditions so the
+    frontend can show them all and only enable apply when conditions are met.
     """
     permission_classes = [IsAuthenticated]
 
@@ -577,30 +578,52 @@ class RetailerDiscountListView(APIView):
 
         today = timezone.now().date()
 
+        # Return ALL active discounts (don't filter by date/usage — let frontend show conditions)
         discounts = DiscountRule.objects.filter(
             company_id=company_id,
             is_active=True,
-            start_date__lte=today,
-            end_date__gte=today,
-            applies_to_products=True,
         )
 
         party = retailer.party
         data = []
         for d in discounts:
-            # Check total usage limit
+            # Compute eligibility reasons
+            reasons = []
+            eligible = True
+
+            # Date check
+            not_started = d.start_date and today < d.start_date
+            expired = d.end_date and today > d.end_date
+            if not_started:
+                reasons.append(f"Starts on {d.start_date.isoformat()}")
+                eligible = False
+            if expired:
+                reasons.append(f"Expired on {d.end_date.isoformat()}")
+                eligible = False
+
+            # Product applicability check
+            if not d.applies_to_products:
+                reasons.append("Not applicable to product purchases")
+                eligible = False
+
+            # Total usage limit
+            total_usage_exhausted = False
             if d.max_total_usage > 0 and d.usage_count >= d.max_total_usage:
-                continue
-            # Check per-customer usage
+                reasons.append("Usage limit reached")
+                eligible = False
+                total_usage_exhausted = True
+
+            # Per-customer usage
             customer_usage = 0
             remaining_usage = None
             if party and d.max_usage_per_customer > 0:
                 customer_usage = DiscountApplication.objects.filter(
                     discount_rule=d, party=party
                 ).count()
+                remaining_usage = max(0, d.max_usage_per_customer - customer_usage)
                 if customer_usage >= d.max_usage_per_customer:
-                    continue
-                remaining_usage = d.max_usage_per_customer - customer_usage
+                    reasons.append("You have used this discount the maximum number of times")
+                    eligible = False
 
             applicable_product_ids = list(
                 d.applicable_products.values_list('id', flat=True)
@@ -615,10 +638,12 @@ class RetailerDiscountListView(APIView):
                 "discount_value": str(d.discount_value),
                 "min_purchase_amount": str(d.min_purchase_amount),
                 "min_quantity": d.min_quantity,
-                "start_date": d.start_date.isoformat(),
-                "end_date": d.end_date.isoformat(),
+                "start_date": d.start_date.isoformat() if d.start_date else None,
+                "end_date": d.end_date.isoformat() if d.end_date else None,
                 "remaining_usage": remaining_usage,
                 "applicable_product_ids": [str(pid) for pid in applicable_product_ids],
+                "eligible": eligible,
+                "reasons": reasons,
             })
 
         return Response(data)
