@@ -59,6 +59,9 @@ export default function NewProductPage() {
     sales_price: '',
     cost: '',
     available_quantity: '',
+    cgst_rate: '',
+    sgst_rate: '',
+    igst_rate: '',
   });
   
   const [recurringPrices, setRecurringPrices] = useState<RecurringPrice[]>([]);
@@ -149,6 +152,9 @@ export default function NewProductPage() {
         price: parseFloat(formData.sales_price),
         cost: parseFloat(formData.cost),
         available_quantity: parseInt(formData.available_quantity) || 0,
+        cgst_rate: parseFloat(formData.cgst_rate) || 0,
+        sgst_rate: parseFloat(formData.sgst_rate) || 0,
+        igst_rate: parseFloat(formData.igst_rate) || 0,
         recurring_prices: cleanRecurringPrices,
         variants: cleanVariants,
       };
@@ -318,6 +324,52 @@ export default function NewProductPage() {
               placeholder="0"
             />
           </div>
+
+          {/* GST Rates */}
+          <div className="border border-gray-600 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-gray-300 mb-3">GST Rates (%)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="cgst_rate" className="text-gray-300">CGST Rate</Label>
+                <Input
+                  id="cgst_rate"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.cgst_rate}
+                  onChange={(e) => handleInputChange('cgst_rate', e.target.value)}
+                  className="bg-gray-700 border-gray-600 text-white mt-1"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <Label htmlFor="sgst_rate" className="text-gray-300">SGST Rate</Label>
+                <Input
+                  id="sgst_rate"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.sgst_rate}
+                  onChange={(e) => handleInputChange('sgst_rate', e.target.value)}
+                  className="bg-gray-700 border-gray-600 text-white mt-1"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <Label htmlFor="igst_rate" className="text-gray-300">IGST Rate</Label>
+                <Input
+                  id="igst_rate"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.igst_rate}
+                  onChange={(e) => handleInputChange('igst_rate', e.target.value)}
+                  className="bg-gray-700 border-gray-600 text-white mt-1"
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Tabs for Recurring Prices and Variants */}
@@ -370,7 +422,7 @@ export default function NewProductPage() {
                   recurringPrices.map((price) => (
                     <TableRow key={price.id} className="border-b border-gray-700">
                       <TableCell>{price.recurring_plan}</TableCell>
-                      <TableCell>${parseFloat(price.price).toFixed(2)}</TableCell>
+                      <TableCell>₹{parseFloat(price.price).toFixed(2)}</TableCell>
                       <TableCell>{price.min_qty}</TableCell>
                       <TableCell>{price.start_date}</TableCell>
                       <TableCell>{price.end_date}</TableCell>
@@ -438,7 +490,7 @@ export default function NewProductPage() {
                     <TableRow key={variant.id} className="border-b border-gray-700">
                       <TableCell>{variant.attribute}</TableCell>
                       <TableCell>{variant.values}</TableCell>
-                      <TableCell>${parseFloat(variant.extra_price).toFixed(2)}</TableCell>
+                      <TableCell>₹{parseFloat(variant.extra_price).toFixed(2)}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
                           <Button

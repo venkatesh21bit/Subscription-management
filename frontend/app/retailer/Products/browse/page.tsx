@@ -5,6 +5,13 @@ import { apiClient } from '@/utils/api';
 import { PaginatedResponse } from '@/types/api';
 import { ShoppingCart, Search, Filter, Package, Plus, Minus } from 'lucide-react';
 
+interface ProductVariant {
+  id: string;
+  attribute: string;
+  values: string;
+  extra_price: string;
+}
+
 interface Product {
   id: string;
   name: string;
@@ -25,6 +32,7 @@ interface Product {
   cgst_rate: string;
   sgst_rate: string;
   igst_rate: string;
+  variants: ProductVariant[];
 }
 
 interface Company {
@@ -360,6 +368,21 @@ const BrowseProductsPage = () => {
 
                 {product.description && (
                   <p className="text-sm text-neutral-400 mb-3 line-clamp-2">{product.description}</p>
+                )}
+
+                {/* Variants */}
+                {product.variants && product.variants.length > 0 && (
+                  <div className="mb-3 space-y-1">
+                    {product.variants.map((variant) => (
+                      <div key={variant.id} className="text-xs bg-neutral-800 rounded px-2 py-1">
+                        <span className="text-neutral-300 font-medium">{variant.attribute}:</span>{' '}
+                        <span className="text-neutral-400">{variant.values}</span>
+                        {parseFloat(variant.extra_price) > 0 && (
+                          <span className="text-green-400 ml-1">(+₹{parseFloat(variant.extra_price).toFixed(2)})</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
 
                 <div className="mb-3">

@@ -93,7 +93,7 @@ class RetailerProductListView(APIView):
             is_portal_visible=True,
             status='available'
         ).select_related('company', 'category').prefetch_related(
-            'stockitems', 'stockitems__stock_balances'
+            'stockitems', 'stockitems__stock_balances', 'product_variants'
         ).order_by('company__name', 'name')
         
         # Search filter
@@ -142,7 +142,16 @@ class RetailerProductListView(APIView):
                 "in_stock": total_stock > 0,
                 "cgst_rate": str(product.cgst_rate),
                 "sgst_rate": str(product.sgst_rate),
-                "igst_rate": str(product.igst_rate)
+                "igst_rate": str(product.igst_rate),
+                "variants": [
+                    {
+                        "id": str(v.id),
+                        "attribute": v.attribute,
+                        "values": v.values,
+                        "extra_price": str(v.extra_price),
+                    }
+                    for v in product.product_variants.all()
+                ],
             })
         
         return Response(data)

@@ -104,7 +104,20 @@ class SubscriptionInvoiceService:
                 line_subtotal = item.unit_price * item.quantity
                 line_discount = line_subtotal * (item.discount_pct / Decimal('100'))
                 line_total_after_discount = line_subtotal - line_discount
-                line_tax = line_total_after_discount * (item.tax_rate / Decimal('100'))
+
+                # Determine effective tax rate: use subscription item's tax_rate
+                # if set, otherwise auto-calculate from product GST rates
+                effective_tax_rate = item.tax_rate
+                if (not effective_tax_rate or effective_tax_rate == 0) and item.product:
+                    product = item.product
+                    gst_from_product = (
+                        getattr(product, 'cgst_rate', 0) or Decimal('0')
+                    ) + (
+                        getattr(product, 'sgst_rate', 0) or Decimal('0')
+                    )
+                    igst_from_product = getattr(product, 'igst_rate', 0) or Decimal('0')
+                    effective_tax_rate = max(gst_from_product, igst_from_product)
+                line_tax = line_total_after_discount * (effective_tax_rate / Decimal('100'))
                 
                 subtotal += line_total_after_discount
                 tax_total += line_tax
@@ -237,7 +250,7 @@ class SubscriptionInvoiceService:
                     'id': str(invoice.id),
                     'invoice_number': invoice.invoice_number,
                     'total_amount': float(invoice.grand_total),
-                    'currency': invoice.currency.code if invoice.currency else 'USD',
+                    'currency': invoice.currency.code if invoice.currency else 'INR',
                     'status': invoice.status,
                     'due_date': invoice.due_date.isoformat(),
                     'customer_name': invoice.party.name,

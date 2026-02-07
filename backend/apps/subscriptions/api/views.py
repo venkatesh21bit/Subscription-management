@@ -1092,18 +1092,73 @@ class OrderCreateInvoiceView(APIView):
             
             # Copy order items to invoice lines
             from apps.invoice.models import InvoiceLine
+            from apps.inventory.models import StockItem, UnitOfMeasure
+            from decimal import Decimal
+
+            default_uom, _ = UnitOfMeasure.objects.get_or_create(
+                symbol='PCS',
+                defaults={'name': 'Pieces', 'category': 'QUANTITY'}
+            )
+
+            subtotal = Decimal('0.00')
+            tax_total = Decimal('0.00')
+            line_no = 1
+
             for order_item in order.items.all():
+                # Find or create a StockItem for the product
+                stock_item = StockItem.objects.filter(
+                    company=request.company,
+                    product=order_item.product
+                ).first()
+                if not stock_item:
+                    stock_item = StockItem.objects.create(
+                        company=request.company,
+                        product=order_item.product,
+                        sku=order_item.product.sku or f'PROD-{order_item.product.id}',
+                        name=order_item.product.name,
+                        uom=default_uom,
+                        is_stock_item=True,
+                        is_active=True
+                    )
+
+                # Calculate line amounts
+                line_subtotal = order_item.unit_price * order_item.quantity
+                discount_pct = order_item.discount_percentage or Decimal('0')
+                line_discount = line_subtotal * (discount_pct / Decimal('100'))
+                line_total = line_subtotal - line_discount
+
+                # Auto-calculate GST from product rates if order item has no tax
+                effective_tax_rate = order_item.tax_rate or Decimal('0')
+                if effective_tax_rate == 0 and order_item.product:
+                    product = order_item.product
+                    gst = (getattr(product, 'cgst_rate', 0) or Decimal('0')) + \
+                          (getattr(product, 'sgst_rate', 0) or Decimal('0'))
+                    igst = getattr(product, 'igst_rate', 0) or Decimal('0')
+                    effective_tax_rate = max(gst, igst)
+                line_tax = line_total * (effective_tax_rate / Decimal('100'))
+
+                subtotal += line_total
+                tax_total += line_tax
+
                 InvoiceLine.objects.create(
                     invoice=invoice,
-                    product=order_item.product,
-                    description=order_item.description or order_item.product.description,
+                    line_no=line_no,
+                    item=stock_item,
+                    description=order_item.description or order_item.product.name,
                     quantity=order_item.quantity,
-                    unit_price=order_item.unit_price,
-                    discount_percentage=order_item.discount_percentage,
-                    hsn_code=getattr(order_item.product, 'hsn_code', ''),
-                    igst_rate=order_item.tax_rate if order_item.tax_rate > 0 else 0,
-                    created_by=request.user
+                    uom=stock_item.uom or default_uom,
+                    unit_rate=order_item.unit_price,
+                    discount_pct=discount_pct,
+                    line_total=line_total,
+                    tax_amount=line_tax,
                 )
+                line_no += 1
+
+            # Update invoice totals
+            invoice.subtotal = subtotal
+            invoice.tax_amount = tax_total
+            invoice.grand_total = subtotal + tax_total
+            invoice.save(update_fields=['subtotal', 'tax_amount', 'grand_total'])
             
             # Update order status
             order.status = OrderStatus.INVOICE_CREATED_PENDING_POSTING
@@ -1337,12 +1392,8 @@ class SubscriptionSimulateRecurringView(APIView):
                 'check': check,
             })
         
-        # Fast-forward if forced and not naturally due
-        if force and not is_due:
-            subscription.next_billing_date = today
-            subscription.save(update_fields=['next_billing_date'])
-        
-        # Generate invoice
+        # Generate invoice (force mode skips due-date check — billing service
+        # will advance from the current next_billing_date regardless)
         from apps.subscriptions.services.invoice_service import SubscriptionInvoiceService
         result = SubscriptionInvoiceService.send_invoice_to_retailer(subscription, auto_post=True)
         
@@ -1447,9 +1498,9 @@ class RetailerSubscriptionListView(APIView):
                 'billing_cycle_count': sub.billing_cycle_count,
                 'monthly_value': float(sub.monthly_value),
                 'currency': {
-                    'code': sub.currency.code if sub.currency else 'USD',
-                    'symbol': sub.currency.symbol if sub.currency else '$',
-                } if sub.currency else {'code': 'USD', 'symbol': '$'},
+                    'code': sub.currency.code if sub.currency else 'INR',
+                    'symbol': sub.currency.symbol if sub.currency else '₹',
+                } if sub.currency else {'code': 'INR', 'symbol': '₹'},
                 'billing_interval': sub.plan.billing_interval,
                 'billing_interval_display': sub.plan.get_billing_interval_display(),
                 # Plan options - used by frontend to show/hide action buttons

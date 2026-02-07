@@ -30,6 +30,7 @@ import {
   BarChartIcon,
   ClockIcon,
   DollarSignIcon,
+  FileText,
   ShoppingBagIcon,
   StoreIcon,
   TableIcon,
@@ -215,6 +216,7 @@ const Dashboard: React.FC = () => {
 const [ordersLoading, setOrdersLoading] = useState(false);
 const [ordersError, setOrdersError] = useState<string | null>(null);
 const [approveLoadingId, setApproveLoadingId] = useState<number | null>(null);
+const [invoiceLoadingId, setInvoiceLoadingId] = useState<string | null>(null);
 
   const fetchEmployeesForOrder = async (orderId: number) => {
   setEmployeeLoading(true);
@@ -399,6 +401,23 @@ const approveOrder = async (orderId: string) => {
     alert((err as Error).message);
   } finally {
     setApproveLoadingId(null);
+  }
+};
+
+// Generate invoice from confirmed order
+const generateInvoiceForOrder = async (orderId: string) => {
+  setInvoiceLoadingId(orderId);
+  try {
+    const response = await apiClient.post(`/subscriptions/orders/${orderId}/create-invoice/`);
+    if (response.error) {
+      throw new Error(response.error || "Failed to generate invoice");
+    }
+    alert(`Invoice ${response.data?.invoice_number || ''} created successfully!`);
+    fetchOrders();
+  } catch (err) {
+    alert((err as Error).message);
+  } finally {
+    setInvoiceLoadingId(null);
   }
 };
 
@@ -803,6 +822,7 @@ useEffect(() => {
               
               <td className="p-2 text-left uppercase">{order.status}</td>
               <td className="p-2 text-center">
+                <div className="flex gap-2 justify-center">
                 {order.status?.toUpperCase() === "DRAFT" ? (
                 <Button
                   className="bg-green-600 text-white px-3 py-1 rounded"
@@ -811,14 +831,31 @@ useEffect(() => {
                 >
                   {approveLoadingId === order.id ? "Confirming..." : "Confirm"}
                 </Button>
+                ) : order.status?.toUpperCase() === "CONFIRMED" ? (
+                  <Button
+                    className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 flex items-center gap-1"
+                    disabled={invoiceLoadingId === order.id}
+                    onClick={() => generateInvoiceForOrder(order.id)}
+                  >
+                    <FileText className="w-3 h-3" />
+                    {invoiceLoadingId === order.id ? "Generating..." : "Generate Invoice"}
+                  </Button>
+                ) : order.status?.toUpperCase() === "INVOICE_CREATED_PENDING_POSTING" ? (
+                  <Button
+                    className="bg-gray-600 text-white px-3 py-1 rounded opacity-60"
+                    disabled
+                  >
+                    Invoice Sent
+                  </Button>
                 ) : (
                   <Button
                     className="bg-gray-600 text-white px-3 py-1 rounded"
                     disabled
                   >
-                    {order.status === 'CONFIRMED' ? 'Confirmed' : order.status}
+                    {order.status}
                   </Button>
                 )}
+                </div>
               </td>
             </tr>
           ))}
