@@ -179,7 +179,11 @@ class SubscriptionInvoiceService:
             invoice.save()
             
             # Update subscription billing tracking
-            subscription.last_billing_date = timezone.now().date()
+            # Use the current next_billing_date as the anchor so repeated
+            # simulations advance the schedule correctly instead of always
+            # computing from "today".
+            current_next = subscription.next_billing_date
+            subscription.last_billing_date = current_next or timezone.now().date()
             subscription.next_billing_date = subscription.calculate_next_billing_date()
             subscription.billing_cycle_count += 1
             subscription.save(update_fields=['last_billing_date', 'next_billing_date', 'billing_cycle_count'])
