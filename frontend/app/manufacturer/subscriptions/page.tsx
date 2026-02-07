@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Search, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,63 +16,18 @@ import {
     TableRow,
 } from "@/components/ui/table"
 
-// Mock subscription data
-const subscriptions = [
-    {
-        id: 1,
-        number: "S001",
-        customer: "Apple Inc",
-        nextInvoice: "Feb 14, 2026",
-        recurring: "$140.00",
-        plan: "Monthly",
-        status: "Active",
-    },
-    {
-        id: 2,
-        number: "S002",
-        customer: "John Doe",
-        nextInvoice: "Feb 20, 2026",
-        recurring: "$89.99",
-        plan: "Monthly",
-        status: "Quotation Sent",
-    },
-    {
-        id: 3,
-        number: "S003",
-        customer: "Microsoft Corp",
-        nextInvoice: "Mar 01, 2026",
-        recurring: "$500.00",
-        plan: "Yearly",
-        status: "Active",
-    },
-    {
-        id: 4,
-        number: "S004",
-        customer: "Jane Smith",
-        nextInvoice: "Feb 28, 2026",
-        recurring: "$75.00",
-        plan: "Monthly",
-        status: "Draft",
-    },
-    {
-        id: 5,
-        number: "S005",
-        customer: "Google LLC",
-        nextInvoice: "Mar 15, 2026",
-        recurring: "$299.99",
-        plan: "Quarterly",
-        status: "Active",
-    },
-    {
-        id: 6,
-        number: "S006",
-        customer: "Amazon Web Services",
-        nextInvoice: "Apr 01, 2026",
-        recurring: "$1,200.00",
-        plan: "Yearly",
-        status: "Quotation Sent",
-    },
-]
+// Subscription type definition
+type Subscription = {
+    number: string;
+    customer: string;
+    nextInvoice: string;
+    recurring: string;
+    plan: string;
+    status: string;
+}
+
+// Empty subscriptions array - ready for API integration
+const subscriptions: Subscription[] = [];
 
 // Helper function to get badge variant based on status
 const getStatusVariant = (status: string) => {
@@ -88,6 +44,7 @@ const getStatusVariant = (status: string) => {
 }
 
 export default function SubscriptionsPage() {
+    const router = useRouter()
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedRows, setSelectedRows] = useState<string[]>([])
 
@@ -148,7 +105,11 @@ export default function SubscriptionsPage() {
 
                     {/* Action Buttons */}
                     <div className="flex gap-2">
-                        <Button variant="default" className="gap-2">
+                        <Button
+                            variant="default"
+                            className="gap-2"
+                            onClick={() => router.push("/manufacturer/subscriptions/create")}
+                        >
                             <Plus className="h-4 w-4" />
                             New
                         </Button>
@@ -189,7 +150,7 @@ export default function SubscriptionsPage() {
                     <TableBody>
                         {filteredSubscriptions.length > 0 ? (
                             filteredSubscriptions.map((subscription) => (
-                                <TableRow key={subscription.id}>
+                                <TableRow key={subscription.number}>
                                     <TableCell>
                                         <Checkbox
                                             checked={selectedRows.includes(subscription.number)}
