@@ -223,6 +223,13 @@ class JoinByCompanyCodeView(APIView):
                 existing_access.approved_by = None
                 existing_access.save()
                 
+                # IMPORTANT: Also update the RetailerUser.status so manufacturer can see it
+                retailer.status = 'PENDING'
+                retailer.approved_at = None
+                retailer.approved_by = None
+                retailer.rejection_reason = ''
+                retailer.save(update_fields=['status', 'approved_at', 'approved_by', 'rejection_reason'])
+                
                 return Response({
                     "message": f"Request re-sent to {company.name}. Please wait for approval.",
                     "connection": {
