@@ -448,18 +448,48 @@ class RetailerApproveView(APIView):
                 )
                 retailer_user.party = party
             
+            # Update party credit limit and payment terms if provided
+            credit_limit = request.data.get('credit_limit')
+            payment_terms = request.data.get('payment_terms', '')
+            
+            if retailer_user.party:
+                if credit_limit is not None:
+                    from decimal import Decimal
+                    retailer_user.party.credit_limit = Decimal(str(credit_limit))
+                
+                # Parse payment terms to get credit_days
+                if payment_terms:
+                    # Try to extract days from format like "Net 30 days" or just "30"
+                    import re
+                    days_match = re.search(r'(\d+)', payment_terms)
+                    if days_match:
+                        retailer_user.party.credit_days = int(days_match.group(1))
+                
+                retailer_user.party.save(update_fields=['credit_limit', 'credit_days'])
+            
             # Approve access
             retailer_user.status = 'APPROVED'
             retailer_user.approved_by = request.user
             retailer_user.approved_at = timezone.now()
             retailer_user.save(update_fields=['status', 'approved_by', 'approved_at', 'party'])
             
+            # Also update RetailerCompanyAccess if it exists
+            from apps.portal.models import RetailerCompanyAccess
+            access = RetailerCompanyAccess.objects.filter(retailer=retailer_user, company=company).first()
+            if access:
+                access.status = 'APPROVED'
+                access.approved_by = request.user
+                access.approved_at = timezone.now()
+                access.save(update_fields=['status', 'approved_by', 'approved_at'])
+            
             return Response({
                 'detail': 'Retailer approved successfully',
                 'retailer_user_id': str(retailer_user.id),
                 'user_email': retailer_user.user.email,
                 'status': 'APPROVED',
-                'party_id': str(retailer_user.party.id) if retailer_user.party else None
+                'party_id': str(retailer_user.party.id) if retailer_user.party else None,
+                'credit_limit': str(retailer_user.party.credit_limit) if retailer_user.party else '0',
+                'payment_terms': f"Net {retailer_user.party.credit_days} days" if retailer_user.party and retailer_user.party.credit_days else 'Net 30 days'
             })
             
         except RetailerUser.DoesNotExist:
@@ -540,28 +570,56 @@ class RetailerListView(APIView):
         
         qs = RetailerUser.objects.filter(company=company).select_related(
             'user', 'party', 'approved_by'
-        ).order_by('-created_at')
+        ).prefetch_related('party__addresses').order_by('-created_at')
         
         if filter_status:
             qs = qs.filter(status=filter_status)
         
-        data = [{
-            'id': str(ru.id),
-            'user': {
-                'id': str(ru.user.id),
-                'email': ru.user.email,
-                'full_name': ru.user.get_full_name()
-            },
-            'party': {
-                'id': str(ru.party.id),
-                'name': ru.party.name
-            } if ru.party else None,
-            'status': ru.status,
-            'approved_by': ru.approved_by.email if ru.approved_by else None,
-            'approved_at': ru.approved_at.isoformat() if ru.approved_at else None,
-            'rejection_reason': ru.rejection_reason,
-            'created_at': ru.created_at.isoformat()
-        } for ru in qs]
+        data = []
+        for ru in qs:
+            # Get address from party if available
+            address = ''
+            if ru.party:
+                party_address = ru.party.addresses.filter(is_default=True).first()
+                if not party_address:
+                    party_address = ru.party.addresses.first()
+                if party_address:
+                    address = f"{party_address.line1}, {party_address.city}, {party_address.state}"
+            
+            # Get request notes from RetailerCompanyAccess if exists
+            notes = ''
+            from apps.portal.models import RetailerCompanyAccess
+            access = RetailerCompanyAccess.objects.filter(retailer=ru, company=company).first()
+            if access:
+                notes = access.notes or ''
+            
+            data.append({
+                'id': str(ru.id),
+                'user': {
+                    'id': str(ru.user.id),
+                    'email': ru.user.email,
+                    'full_name': ru.user.get_full_name()
+                },
+                'user_id': str(ru.user.id),
+                'user_name': ru.user.get_full_name() or ru.user.email,
+                'user_email': ru.user.email,
+                'party': {
+                    'id': str(ru.party.id),
+                    'name': ru.party.name
+                } if ru.party else None,
+                'party_id': str(ru.party.id) if ru.party else None,
+                'party_name': ru.party.name if ru.party else '',
+                'business_name': ru.party.name if ru.party else ru.user.get_full_name() or ru.user.email,
+                'address': address,
+                'status': ru.status,
+                'notes': notes,
+                'approved_by': ru.approved_by.email if ru.approved_by else None,
+                'approved_at': ru.approved_at.isoformat() if ru.approved_at else None,
+                'rejection_reason': ru.rejection_reason,
+                'created_at': ru.created_at.isoformat(),
+                'credit_limit': str(ru.party.credit_limit) if ru.party else '0',
+                'payment_terms': f"Net {ru.party.credit_days} days" if ru.party and ru.party.credit_days else 'Net 30 days'
+            })
         
         return Response(data)
 

@@ -209,11 +209,15 @@ class JoinByCompanyCodeView(APIView):
             )
         
         # Create pending connection request
+        # Get optional message from request
+        message = request.data.get('message', '').strip()
+        notes = message if message else f"Request to join via company code: {company_code}"
+        
         connection = RetailerCompanyAccess.objects.create(
             retailer=retailer,
             company=company,
             status='PENDING',
-            notes=f"Request to join via company code: {company_code}"
+            notes=notes
         )
         
         return Response({
@@ -224,7 +228,7 @@ class JoinByCompanyCodeView(APIView):
                 "company_name": company.name,
                 "company_code": company.code,
                 "status": connection.status,
-                "connected_at": connection.approved_at.isoformat()
+                "connected_at": connection.created_at.isoformat()
             }
         }, status=status.HTTP_201_CREATED)
 
@@ -243,7 +247,9 @@ class RetailerCompanyListView(APIView):
             "company_name": "ABC Manufacturing",
             "company_code": "ABC001",
             "status": "APPROVED",
-            "connected_at": "2026-02-01T..."
+            "connected_at": "2026-02-01T...",
+            "credit_limit": "50000.00",
+            "payment_terms": "Net 30 days"
         }
     ]
     """
@@ -254,29 +260,46 @@ class RetailerCompanyListView(APIView):
         user = request.user
         
         # Get all retailer profiles for this user (one per company)
-        retailer_ids = RetailerUser.objects.filter(user=user).values_list('id', flat=True)
+        retailer_users = RetailerUser.objects.filter(user=user).select_related(
+            'company', 'party'
+        )
         
-        if not retailer_ids:
+        if not retailer_users.exists():
             return Response([], status=status.HTTP_200_OK)
         
-        # Get connections for all retailer profiles
-        connections = RetailerCompanyAccess.objects.filter(
-            retailer_id__in=retailer_ids
-        ).select_related('company').order_by('-approved_at', '-created_at')
+        # Build response data from RetailerUser (which has party with credit_limit)
+        data = []
         
         # Filter by status if provided
         filter_status = request.query_params.get('status')
-        if filter_status:
-            connections = connections.filter(status=filter_status.upper())
         
-        data = [{
-            "id": str(conn.id),
-            "company_id": str(conn.company.id),
-            "company_name": conn.company.name,
-            "company_code": conn.company.code,
-            "status": conn.status,
-            "connected_at": conn.approved_at.isoformat() if conn.approved_at else conn.created_at.isoformat(),
-            "notes": conn.notes
-        } for conn in connections]
+        for ru in retailer_users:
+            # Apply status filter if provided
+            if filter_status and ru.status != filter_status.upper():
+                continue
+            
+            # Get credit_limit from party if exists
+            credit_limit = '0'
+            payment_terms = 'Net 30 days'
+            if ru.party:
+                credit_limit = str(ru.party.credit_limit) if ru.party.credit_limit else '0'
+                if ru.party.credit_days:
+                    payment_terms = f"Net {ru.party.credit_days} days"
+            
+            data.append({
+                "id": str(ru.id),
+                "company_id": str(ru.company.id),
+                "company_name": ru.company.name,
+                "company_code": ru.company.code,
+                "status": ru.status,
+                "connected_at": ru.approved_at.isoformat() if ru.approved_at else ru.created_at.isoformat(),
+                "notes": "",  # RetailerUser doesn't have notes, it's in RetailerCompanyAccess
+                "credit_limit": credit_limit,
+                "payment_terms": payment_terms
+            })
+        
+        # Sort by connected_at descending
+        data.sort(key=lambda x: x['connected_at'], reverse=True)
         
         return Response(data)
+
