@@ -10,6 +10,8 @@ DEBUG = False
 ALLOWED_HOSTS = [
     'backend-production-8d38.up.railway.app',
     'vendor-backend-production-2053.up.railway.app',
+    'healthcheck.railway.app',
+    '.railway.app',
     # Add your production domains here
 ]
 
