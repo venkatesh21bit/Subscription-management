@@ -171,8 +171,8 @@ export default function RetailerBillsPage() {
       <div className="container mx-auto p-6">
         <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">My Bills</h1>
-          <p className="text-gray-600 mt-2">View your invoices and payment status</p>
+          <h1 className="text-3xl font-bold text-white">My Bills</h1>
+          <p className="text-gray-400 mt-2">View your invoices and payment status</p>
         </div>
       </div>
 
@@ -237,11 +237,11 @@ export default function RetailerBillsPage() {
             <CardContent className="p-8">
               <div className="text-center">
                 <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">
+                <p className="text-gray-400">
                   {bills.length === 0 ? 'No bills found' : 'No bills match your filters'}
                 </p>
                 {bills.length === 0 && (
-                  <p className="text-sm text-gray-500 mt-2">
+                  <p className="text-sm text-gray-400 mt-2">
                     Bills will appear here when you receive invoices from manufacturers.
                   </p>
                 )}
@@ -271,7 +271,7 @@ export default function RetailerBillsPage() {
                         )}
                       </div>
                     </div>
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-gray-400">
                       <p><span className="font-medium">From:</span> {bill.party.name}</p>
                       <p><span className="font-medium">Email:</span> {bill.party.email}</p>
                     </div>
@@ -290,7 +290,7 @@ export default function RetailerBillsPage() {
                   {/* Right side - Amount and actions */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-6">
                     <div className="text-right">
-                      <p className="text-2xl font-bold text-gray-900">
+                      <p className="text-2xl font-bold text-white">
                         {formatCurrency(bill.total_amount, bill.currency)}
                       </p>
                       {bill.outstanding_amount > 0 && (
@@ -326,26 +326,26 @@ export default function RetailerBillsPage() {
           <CardContent className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">{filteredBills.length}</p>
-                <p className="text-sm text-gray-600">Total Bills</p>
+                <p className="text-2xl font-bold text-white">{filteredBills.length}</p>
+                <p className="text-sm text-gray-400">Total Bills</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold text-green-600">
                   {filteredBills.filter(b => b.status === 'PAID').length}
                 </p>
-                <p className="text-sm text-gray-600">Paid</p>
+                <p className="text-sm text-gray-400">Paid</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold text-red-600">
                   {filteredBills.filter(b => isOverdue(b.due_date, b.status)).length}
                 </p>
-                <p className="text-sm text-gray-600">Overdue</p>
+                <p className="text-sm text-gray-400">Overdue</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold text-yellow-600">
                   {filteredBills.filter(b => b.status === 'PARTIALLY_PAID').length}
                 </p>
-                <p className="text-sm text-gray-600">Partially Paid</p>
+                <p className="text-sm text-gray-400">Partially Paid</p>
               </div>
             </div>
           </CardContent>

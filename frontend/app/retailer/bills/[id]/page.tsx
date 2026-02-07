@@ -384,8 +384,8 @@ export default function RetailerBillDetailPage() {
               <ArrowLeft className="h-4 w-4 mr-2" /> Back to Bills
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">{bill.invoice_number}</h1>
-              <p className="text-gray-600">Bill Details</p>
+              <h1 className="text-3xl font-bold text-white">{bill.invoice_number}</h1>
+              <p className="text-gray-400">Bill Details</p>
             </div>
           </div>
           <div className="flex space-x-2">
@@ -424,23 +424,23 @@ export default function RetailerBillDetailPage() {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-3">Invoice Details</h3>
+                    <h3 className="font-semibold text-white mb-3">Invoice Details</h3>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Invoice Number:</span>
+                        <span className="text-gray-400">Invoice Number:</span>
                         <span className="font-medium">{bill.invoice_number}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Invoice Date:</span>
+                        <span className="text-gray-400">Invoice Date:</span>
                         <span className="font-medium">{formatDate(bill.invoice_date)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Due Date:</span>
+                        <span className="text-gray-400">Due Date:</span>
                         <span className="font-medium">{formatDate(bill.due_date)}</span>
                       </div>
                       {bill.billing_period_start && bill.billing_period_end && (
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Billing Period:</span>
+                          <span className="text-gray-400">Billing Period:</span>
                           <span className="font-medium">
                             {formatDate(bill.billing_period_start)} – {formatDate(bill.billing_period_end)}
                           </span>
@@ -448,30 +448,30 @@ export default function RetailerBillDetailPage() {
                       )}
                       {bill.is_auto_generated && (
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Type:</span>
+                          <span className="text-gray-400">Type:</span>
                           <Badge variant="outline" className="text-xs">Auto-generated</Badge>
                         </div>
                       )}
                     </div>
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-3">Payment Status</h3>
+                    <h3 className="font-semibold text-white mb-3">Payment Status</h3>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Status:</span>
+                        <span className="text-gray-400">Status:</span>
                         <Badge className={statusColors[bill.status] || ''}>
                           {bill.status.replace('_', ' ')}
                         </Badge>
                       </div>
                       {bill.paid_amount > 0 && (
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Amount Paid:</span>
+                          <span className="text-gray-400">Amount Paid:</span>
                           <span className="font-medium text-green-600">{fmt(bill.paid_amount)}</span>
                         </div>
                       )}
                       {bill.outstanding_amount > 0 && (
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Amount Due:</span>
+                          <span className="text-gray-400">Amount Due:</span>
                           <span className="font-medium text-red-600">{fmt(bill.outstanding_amount)}</span>
                         </div>
                       )}
@@ -504,10 +504,10 @@ export default function RetailerBillDetailPage() {
                             <td className="p-2">
                               <p className="font-medium">{line.product?.name || line.item_name || 'Service'}</p>
                               {(line.product?.code || line.item_sku) && (
-                                <p className="text-sm text-gray-500">{line.product?.code || line.item_sku}</p>
+                                <p className="text-sm text-gray-400">{line.product?.code || line.item_sku}</p>
                               )}
                               {line.description && (
-                                <p className="text-sm text-gray-500">{line.description}</p>
+                                <p className="text-sm text-gray-400">{line.description}</p>
                               )}
                             </td>
                             <td className="p-2 text-right">{line.quantity}</td>
@@ -555,7 +555,7 @@ export default function RetailerBillDetailPage() {
                                 {paymentMethodLabels[payment.payment_method] || payment.payment_method}
                               </Badge>
                             </td>
-                            <td className="p-2 text-sm text-gray-600">
+                            <td className="p-2 text-sm text-gray-400">
                               {payment.reference_number || '—'}
                             </td>
                             <td className="p-2 text-right font-medium text-green-600">
@@ -577,14 +577,14 @@ export default function RetailerBillDetailPage() {
                 <CardContent>
                   {bill.notes && (
                     <div className="mb-4">
-                      <h3 className="font-semibold text-gray-900 mb-2">Notes</h3>
-                      <p className="text-gray-700 whitespace-pre-wrap">{bill.notes}</p>
+                      <h3 className="font-semibold text-white mb-2">Notes</h3>
+                      <p className="text-gray-300 whitespace-pre-wrap">{bill.notes}</p>
                     </div>
                   )}
                   {bill.terms_and_conditions && (
                     <div>
-                      <h3 className="font-semibold text-gray-900 mb-2">Terms & Conditions</h3>
-                      <p className="text-gray-700 whitespace-pre-wrap">{bill.terms_and_conditions}</p>
+                      <h3 className="font-semibold text-white mb-2">Terms & Conditions</h3>
+                      <p className="text-gray-300 whitespace-pre-wrap">{bill.terms_and_conditions}</p>
                     </div>
                   )}
                 </CardContent>
@@ -602,8 +602,8 @@ export default function RetailerBillDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="font-semibold text-gray-900">{bill.party_name}</p>
-                {bill.party_email && <p className="text-sm text-gray-600">{bill.party_email}</p>}
+                <p className="font-semibold text-white">{bill.party_name}</p>
+                {bill.party_email && <p className="text-sm text-gray-400">{bill.party_email}</p>}
               </CardContent>
             </Card>
 
@@ -618,7 +618,7 @@ export default function RetailerBillDetailPage() {
                 <div className="space-y-3">
                   {bill.subtotal > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Subtotal</span>
+                      <span className="text-gray-400">Subtotal</span>
                       <span>{fmt(bill.subtotal)}</span>
                     </div>
                   )}
@@ -630,7 +630,7 @@ export default function RetailerBillDetailPage() {
                   )}
                   {bill.tax_amount > 0 && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Tax</span>
+                      <span className="text-gray-400">Tax</span>
                       <span>{fmt(bill.tax_amount)}</span>
                     </div>
                   )}
@@ -693,7 +693,7 @@ export default function RetailerBillDetailPage() {
                         placeholder={`Max: ${fmt(bill.outstanding_amount)}`}
                         required
                       />
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-400 mt-1">
                         Outstanding: {fmt(bill.outstanding_amount)}
                       </p>
                     </div>

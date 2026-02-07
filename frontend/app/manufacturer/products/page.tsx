@@ -137,12 +137,16 @@ export default function ProductListPage() {
     }
 
     try {
-      await apiClient.delete(`/catalog/products/${productId}/`);
+      const result = await apiClient.delete(`/catalog/products/${productId}/`);
+      if (result.error) {
+        alert(result.error);
+        return;
+      }
       // Refresh the list
       fetchProducts();
     } catch (error: any) {
       console.error('Error deleting product:', error);
-      alert(error.response?.data?.error || 'Failed to delete product');
+      alert('Failed to delete product');
     }
   };
 

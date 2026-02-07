@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Q, Count
+from django.db import IntegrityError
 
 from apps.products.models import Product, Category
 from apps.products.api.serializers import (
@@ -216,13 +217,14 @@ class ProductListCreateView(APIView):
         end = start + page_size
         products_page = qs[start:end]
         
-        # Sync stock quantities from inventory system
+        # Sync stock quantities from inventory system (only for products with stock items)
         for product in products_page:
-            try:
-                product.update_stock_from_items()
-            except Exception:
-                # Continue even if sync fails for some products
-                pass
+            if product.stockitems.exists():
+                try:
+                    product.update_stock_from_items()
+                except Exception:
+                    # Continue even if sync fails for some products
+                    pass
         
         serializer = ProductListSerializer(products_page, many=True)
         return Response({
@@ -250,11 +252,13 @@ class ProductListCreateView(APIView):
         )
         if serializer.is_valid():
             product = serializer.save()
-            # Sync stock from inventory system
-            try:
-                product.update_stock_from_items()
-            except Exception:
-                pass
+            # Only sync stock if product has linked stock items
+            # (otherwise it overwrites the user-set available_quantity)
+            if product.stockitems.exists():
+                try:
+                    product.update_stock_from_items()
+                except Exception:
+                    pass
             # Return detailed view
             detail_serializer = ProductDetailSerializer(product)
             return Response(detail_serializer.data, status=status.HTTP_201_CREATED)
@@ -295,11 +299,12 @@ class ProductDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Sync stock quantity from inventory system
-        try:
-            product.update_stock_from_items()
-        except Exception:
-            pass  # Continue even if sync fails
+        # Only sync stock if product has linked stock items
+        if product.stockitems.exists():
+            try:
+                product.update_stock_from_items()
+            except Exception:
+                pass  # Continue even if sync fails
         
         serializer = ProductDetailSerializer(product)
         return Response(serializer.data)
@@ -319,12 +324,13 @@ class ProductDetailView(APIView):
             context={'request': request}
         )
         if serializer.is_valid():
-            serializer.save()
-            # Sync stock before returning
-            try:
-                product.update_stock_from_items()
-            except Exception:
-                pass
+            product = serializer.save()
+            # Only sync stock if product has linked stock items
+            if product.stockitems.exists():
+                try:
+                    product.update_stock_from_items()
+                except Exception:
+                    pass
             # Return detailed view
             detail_serializer = ProductDetailSerializer(product)
             return Response(detail_serializer.data)
@@ -346,12 +352,13 @@ class ProductDetailView(APIView):
             context={'request': request}
         )
         if serializer.is_valid():
-            serializer.save()
-            # Sync stock before returning
-            try:
-                product.update_stock_from_items()
-            except Exception:
-                pass
+            product = serializer.save()
+            # Only sync stock if product has linked stock items
+            if product.stockitems.exists():
+                try:
+                    product.update_stock_from_items()
+                except Exception:
+                    pass
             # Return detailed view
             detail_serializer = ProductDetailSerializer(product)
             return Response(detail_serializer.data)
@@ -366,17 +373,36 @@ class ProductDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Check if product has linked stock items
+        # Check for linked records that would prevent deletion
+        blockers = []
         if product.stockitems.exists():
+            blockers.append('stock items')
+        if hasattr(product, 'plan_memberships') and product.plan_memberships.exists():
+            blockers.append('subscription plans')
+        if hasattr(product, 'subscription_items') and product.subscription_items.exists():
+            blockers.append('active subscriptions')
+        if hasattr(product, 'quotation_items') and product.quotation_items.exists():
+            blockers.append('quotations')
+        
+        if blockers:
             return Response(
                 {
-                    'error': 'Cannot delete product with linked stock items.',
-                    'suggestion': 'Set is_portal_visible=False to hide instead.'
+                    'error': f'Cannot delete product. It is linked to: {", ".join(blockers)}.',
+                    'suggestion': 'Remove linked records first, or set the product status to discontinued.'
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        product.delete()
+        try:
+            product.delete()
+        except IntegrityError:
+            return Response(
+                {
+                    'error': 'Cannot delete product. It is referenced by other records.',
+                    'suggestion': 'Set product status to discontinued instead.'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

@@ -309,8 +309,8 @@ export default function BillDetailPage() {
             Back to Bills
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">{bill.invoice_number}</h1>
-            <p className="text-gray-600">Invoice Details</p>
+            <h1 className="text-3xl font-bold text-white">{bill.invoice_number}</h1>
+            <p className="text-gray-400">Invoice Details</p>
           </div>
         </div>
         <div className="flex space-x-2">
@@ -349,50 +349,50 @@ export default function BillDetailPage() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-3">Basic Details</h3>
+                  <h3 className="font-semibold text-white mb-3">Basic Details</h3>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Invoice Number:</span>
+                      <span className="text-gray-400">Invoice Number:</span>
                       <span className="font-medium">{bill.invoice_number}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Invoice Date:</span>
+                      <span className="text-gray-400">Invoice Date:</span>
                       <span className="font-medium">{formatDate(bill.invoice_date)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Due Date:</span>
+                      <span className="text-gray-400">Due Date:</span>
                       <span className="font-medium">{formatDate(bill.due_date)}</span>
                     </div>
                     {bill.financial_year && (
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Financial Year:</span>
+                        <span className="text-gray-400">Financial Year:</span>
                         <span className="font-medium">{bill.financial_year.name}</span>
                       </div>
                     )}
                   </div>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-3">Billing Period</h3>
+                  <h3 className="font-semibold text-white mb-3">Billing Period</h3>
                   <div className="space-y-2 text-sm">
                     {bill.billing_period_start && (
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Period Start:</span>
+                        <span className="text-gray-400">Period Start:</span>
                         <span className="font-medium">{formatDate(bill.billing_period_start)}</span>
                       </div>
                     )}
                     {bill.billing_period_end && (
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Period End:</span>
+                        <span className="text-gray-400">Period End:</span>
                         <span className="font-medium">{formatDate(bill.billing_period_end)}</span>
                       </div>
                     )}
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Created:</span>
+                      <span className="text-gray-400">Created:</span>
                       <span className="font-medium">{formatDate(bill.created_at)}</span>
                     </div>
                     {bill.posted_at && (
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Posted:</span>
+                        <span className="text-gray-400">Posted:</span>
                         <span className="font-medium">{formatDate(bill.posted_at)}</span>
                       </div>
                     )}
@@ -426,10 +426,10 @@ export default function BillDetailPage() {
                             <div>
                               <p className="font-medium">{line.product?.name || 'Service'}</p>
                               {line.product?.code && (
-                                <p className="text-sm text-gray-500">{line.product.code}</p>
+                                <p className="text-sm text-gray-400">{line.product.code}</p>
                               )}
                               {line.description && (
-                                <p className="text-sm text-gray-500">{line.description}</p>
+                                <p className="text-sm text-gray-400">{line.description}</p>
                               )}
                             </div>
                           </td>
@@ -454,14 +454,14 @@ export default function BillDetailPage() {
               <CardContent>
                 {bill.notes && (
                   <div className="mb-4">
-                    <h3 className="font-semibold text-gray-900 mb-2">Notes</h3>
-                    <p className="text-gray-700 whitespace-pre-wrap">{bill.notes}</p>
+                      <h3 className="font-semibold text-white mb-2">Notes</h3>
+                      <p className="text-gray-300 whitespace-pre-wrap">{bill.notes}</p>
                   </div>
                 )}
                 {bill.terms_and_conditions && (
                   <div>
-                    <h3 className="font-semibold text-gray-900 mb-2">Terms & Conditions</h3>
-                    <p className="text-gray-700 whitespace-pre-wrap">{bill.terms_and_conditions}</p>
+                      <h3 className="font-semibold text-white mb-2">Terms & Conditions</h3>
+                      <p className="text-gray-300 whitespace-pre-wrap">{bill.terms_and_conditions}</p>
                   </div>
                 )}
               </CardContent>
@@ -482,10 +482,10 @@ export default function BillDetailPage() {
             <CardContent>
               <div className="space-y-3">
                 <div>
-                  <p className="font-semibold text-gray-900">{bill.party.name}</p>
-                  <p className="text-sm text-gray-600">{bill.party.email}</p>
+                  <p className="font-semibold text-white">{bill.party.name}</p>
+                  <p className="text-sm text-gray-400">{bill.party.email}</p>
                   {bill.party.phone && (
-                    <p className="text-sm text-gray-600">{bill.party.phone}</p>
+                    <p className="text-sm text-gray-400">{bill.party.phone}</p>
                   )}
                 </div>
               </div>
@@ -504,7 +504,7 @@ export default function BillDetailPage() {
               <div className="space-y-3">
                 {bill.subtotal !== undefined && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Subtotal</span>
+                    <span className="text-gray-400">Subtotal</span>
                     <span>{formatCurrency(bill.subtotal, bill.currency)}</span>
                   </div>
                 )}
@@ -516,7 +516,7 @@ export default function BillDetailPage() {
                 )}
                 {bill.tax_amount !== undefined && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Tax</span>
+                    <span className="text-gray-400">Tax</span>
                     <span>{formatCurrency(bill.tax_amount, bill.currency)}</span>
                   </div>
                 )}
@@ -550,11 +550,11 @@ export default function BillDetailPage() {
               <CardContent>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Voucher Number</span>
+                    <span className="text-gray-400">Voucher Number</span>
                     <span className="font-medium">{bill.voucher.voucher_number}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Amount</span>
+                    <span className="text-gray-400">Amount</span>
                     <span className="font-medium">{formatCurrency(bill.voucher.total_amount, bill.currency)}</span>
                   </div>
                 </div>
