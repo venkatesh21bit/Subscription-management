@@ -225,9 +225,10 @@ class SubscriptionInvoiceService:
     
     @staticmethod
     @transaction.atomic
-    def send_invoice_to_retailer(subscription: Subscription, auto_post=False):
+    def send_invoice_to_retailer(subscription: Subscription, auto_post=True):
         """
         Generate and send invoice to retailer.
+        Default auto_post=True so invoices are POSTED (visible to retailer).
         """
         try:
             invoice = SubscriptionInvoiceService.generate_invoice_from_subscription(subscription)

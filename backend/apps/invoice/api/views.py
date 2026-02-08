@@ -46,13 +46,33 @@ def _reduce_product_stock(invoice):
 
 
 def _get_retailer_party_ids(user):
-    """Get party IDs for a retailer user."""
-    from apps.party.models import RetailerUser
-    return list(
-        RetailerUser.objects.filter(
-            user=user, status='APPROVED', party__isnull=False
-        ).values_list('party_id', flat=True)
+    """Get party IDs for a retailer user (by linked party OR email match)."""
+    from apps.party.models import RetailerUser, Party
+    from django.db.models import Q
+
+    retailer_mappings = RetailerUser.objects.filter(
+        user=user, status='APPROVED'
     )
+    if not retailer_mappings.exists():
+        return []
+
+    # Direct party links
+    party_ids = set(
+        retailer_mappings.filter(party__isnull=False)
+        .values_list('party_id', flat=True)
+    )
+
+    # Also find parties matched by email within retailer's companies
+    company_ids = list(
+        retailer_mappings.values_list('company_id', flat=True)
+    )
+    email_party_ids = set(
+        Party.objects.filter(
+            email=user.email, company_id__in=company_ids
+        ).values_list('id', flat=True)
+    )
+
+    return list(party_ids | email_party_ids)
 
 
 # ================================================================

@@ -690,17 +690,29 @@ class QuotationAcceptView(APIView):
         """Accept a quotation."""
         try:
             # Check if user is a retailer
-            from apps.party.models import RetailerUser
+            from apps.party.models import RetailerUser, Party
             retailer_mappings = RetailerUser.objects.filter(
                 user=request.user,
                 status='APPROVED'
-            ).values_list('party_id', flat=True)
+            )
             
             if retailer_mappings.exists():
-                # Retailer: can accept quotations where party is one of their linked parties
+                # Retailer: match by linked party OR by party email
+                party_ids = list(
+                    retailer_mappings.filter(party__isnull=False)
+                    .values_list('party_id', flat=True)
+                )
+                company_ids = list(
+                    retailer_mappings.values_list('company_id', flat=True)
+                )
+                q_filter = Q()
+                if party_ids:
+                    q_filter |= Q(party_id__in=party_ids)
+                q_filter |= Q(party__email=request.user.email, company_id__in=company_ids)
+                
                 quotation = Quotation.objects.select_related(
                     'party', 'plan', 'currency'
-                ).get(id=quotation_id, party_id__in=retailer_mappings)
+                ).get(Q(id=quotation_id) & q_filter)
             else:
                 # Manufacturer: can access their company's quotations
                 quotation = Quotation.objects.select_related(
@@ -807,13 +819,24 @@ class QuotationRejectView(APIView):
             retailer_mappings = RetailerUser.objects.filter(
                 user=request.user,
                 status='APPROVED'
-            ).values_list('party_id', flat=True)
+            )
             
             if retailer_mappings.exists():
-                # Retailer: can reject quotations where party is one of their linked parties
+                # Retailer: match by linked party OR by party email
+                party_ids = list(
+                    retailer_mappings.filter(party__isnull=False)
+                    .values_list('party_id', flat=True)
+                )
+                company_ids = list(
+                    retailer_mappings.values_list('company_id', flat=True)
+                )
+                q_filter = Q()
+                if party_ids:
+                    q_filter |= Q(party_id__in=party_ids)
+                q_filter |= Q(party__email=request.user.email, company_id__in=company_ids)
+                
                 quotation = Quotation.objects.get(
-                    id=quotation_id,
-                    party_id__in=retailer_mappings
+                    Q(id=quotation_id) & q_filter
                 )
             else:
                 # Manufacturer: can access their company's quotations
@@ -1551,20 +1574,36 @@ class RetailerSubscriptionActionView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request, subscription_id):
-        from apps.party.models import RetailerUser
+        from apps.party.models import RetailerUser, Party
         
-        retailer_party_ids = list(
-            RetailerUser.objects.filter(
-                user=request.user, status='APPROVED', party__isnull=False
-            ).values_list('party_id', flat=True)
+        retailer_mappings = RetailerUser.objects.filter(
+            user=request.user, status='APPROVED'
         )
         
-        if not retailer_party_ids:
+        if not retailer_mappings.exists():
+            return Response({'error': 'No retailer access'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get party IDs by direct link + email match
+        party_ids = set(
+            retailer_mappings.filter(party__isnull=False)
+            .values_list('party_id', flat=True)
+        )
+        company_ids = list(
+            retailer_mappings.values_list('company_id', flat=True)
+        )
+        email_party_ids = set(
+            Party.objects.filter(
+                email=request.user.email, company_id__in=company_ids
+            ).values_list('id', flat=True)
+        )
+        all_party_ids = list(party_ids | email_party_ids)
+        
+        if not all_party_ids:
             return Response({'error': 'No retailer access'}, status=status.HTTP_403_FORBIDDEN)
         
         try:
             subscription = Subscription.objects.select_related('plan').get(
-                id=subscription_id, party_id__in=retailer_party_ids
+                id=subscription_id, party_id__in=all_party_ids
             )
         except Subscription.DoesNotExist:
             return Response({'error': 'Subscription not found'}, status=status.HTTP_404_NOT_FOUND)
