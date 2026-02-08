@@ -505,17 +505,34 @@ class QuotationListCreateView(APIView):
     def get(self, request):
         """List all quotations with filtering."""
         # Check if user is a retailer viewing quotations sent to them
-        from apps.party.models import RetailerUser
+        from apps.party.models import RetailerUser, Party
         retailer_mappings = RetailerUser.objects.filter(
             user=request.user,
             status='APPROVED'
-        ).values_list('party_id', flat=True)
+        )
         
         if retailer_mappings.exists():
-            # Retailer: show quotations where party is one of their linked parties
-            quotations = Quotation.objects.filter(
-                party_id__in=retailer_mappings
-            ).select_related('party', 'plan', 'currency').order_by('-created_at')
+            # Retailer: show quotations sent to them
+            # Match by linked party OR by party email matching user email
+            party_ids = list(
+                retailer_mappings.filter(party__isnull=False)
+                .values_list('party_id', flat=True)
+            )
+            company_ids = list(
+                retailer_mappings.values_list('company_id', flat=True)
+            )
+            
+            from django.db.models import Q
+            q = Q()
+            if party_ids:
+                q |= Q(party_id__in=party_ids)
+            # Also match by email so quotations are visible even if
+            # the RetailerUser.party differs from the Quotation.party
+            q |= Q(party__email=request.user.email, company_id__in=company_ids)
+            
+            quotations = Quotation.objects.filter(q).select_related(
+                'party', 'plan', 'currency'
+            ).order_by('-created_at')
         else:
             # Manufacturer: show quotations created by their company
             quotations = Quotation.objects.filter(
@@ -1444,20 +1461,37 @@ class RetailerSubscriptionListView(APIView):
     
     def get(self, request):
         from apps.party.models import RetailerUser
+        from django.db.models import Q
         
-        # Get retailer's party IDs
-        retailer_party_ids = list(
-            RetailerUser.objects.filter(
-                user=request.user, status='APPROVED', party__isnull=False
-            ).values_list('party_id', flat=True)
+        # Get retailer's approved mappings
+        retailer_mappings = RetailerUser.objects.filter(
+            user=request.user, status='APPROVED'
         )
         
-        if not retailer_party_ids:
+        if not retailer_mappings.exists():
             return Response({'subscriptions': [], 'count': 0})
         
-        subscriptions = Subscription.objects.filter(
-            party_id__in=retailer_party_ids
-        ).select_related('party', 'plan', 'currency').order_by('-created_at')
+        # Get party IDs and company IDs
+        retailer_party_ids = list(
+            retailer_mappings.filter(party__isnull=False)
+            .values_list('party_id', flat=True)
+        )
+        company_ids = list(
+            retailer_mappings.values_list('company_id', flat=True)
+        )
+        
+        # Match by linked party OR by party email
+        q = Q()
+        if retailer_party_ids:
+            q |= Q(party_id__in=retailer_party_ids)
+        q |= Q(party__email=request.user.email, company_id__in=company_ids)
+        
+        if not q:
+            return Response({'subscriptions': [], 'count': 0})
+        
+        subscriptions = Subscription.objects.filter(q).select_related(
+            'party', 'plan', 'currency'
+        ).order_by('-created_at')
         
         # Filters
         status_filter = request.query_params.get('status')
