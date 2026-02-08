@@ -445,8 +445,7 @@ class RetailerApproveView(APIView):
                     ledger=ledger,
                     email=retailer_user.user.email,
                     phone=request.data.get('phone', ''),
-                    is_retailer=True,
-                    created_by=request.user
+                    is_retailer=True
                 )
                 retailer_user.party = party
             
