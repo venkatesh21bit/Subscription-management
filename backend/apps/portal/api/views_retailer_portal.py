@@ -707,9 +707,24 @@ class RetailerOrderListView(APIView):
         
         data = []
         for order in orders:
-            # Calculate total (quantity * unit_rate for each item)
+            # Calculate subtotal (quantity * unit_rate for each item)
             items = order.items.all()
-            total_amount = sum((item.quantity * item.unit_rate) for item in items)
+            subtotal = sum((item.quantity * item.unit_rate) for item in items)
+
+            # Extract discount from notes (format: "| Discount applied: CODE (-₹AMOUNT)")
+            discount_amount = Decimal('0.00')
+            discount_code = None
+            if order.notes:
+                import re
+                match = re.search(r'Discount applied:\s*(\S+)\s*\(-₹([\d.]+)\)', order.notes)
+                if match:
+                    discount_code = match.group(1)
+                    try:
+                        discount_amount = Decimal(match.group(2))
+                    except Exception:
+                        discount_amount = Decimal('0.00')
+
+            total_amount = subtotal - discount_amount
             
             data.append({
                 "id": str(order.id),
@@ -720,6 +735,9 @@ class RetailerOrderListView(APIView):
                 "order_date": order.order_date.isoformat(),
                 "delivery_date": order.delivery_date.isoformat() if order.delivery_date else None,
                 "total_amount": str(total_amount),
+                "subtotal": str(subtotal),
+                "discount_amount": str(discount_amount),
+                "discount_code": discount_code,
                 "items_count": len(items),
                 "notes": order.notes,
                 "created_at": order.created_at.isoformat()

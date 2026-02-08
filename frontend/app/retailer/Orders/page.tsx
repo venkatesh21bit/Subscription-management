@@ -67,7 +67,12 @@ interface Order {
   order_date: string;
   status: string;
   total_amount: string;
+  subtotal?: string;
+  discount_amount?: string;
+  discount_code?: string | null;
   item_count: number;
+  items_count?: number;
+  notes?: string;
 }
 
 const OrdersPage = () => {
@@ -430,8 +435,17 @@ const OrdersPage = () => {
                           <td className="py-3 px-4 font-medium">{order.order_number || `#${order.id}`}</td>
                           <td className="py-3 px-4">{order.company_name}</td>
                           <td className="py-3 px-4">{new Date(order.order_date).toLocaleDateString()}</td>
-                          <td className="py-3 px-4">{order.item_count} items</td>
-                          <td className="py-3 px-4 font-semibold">₹{parseFloat(order.total_amount || '0').toLocaleString()}</td>
+                          <td className="py-3 px-4">{order.items_count || order.item_count} items</td>
+                          <td className="py-3 px-4">
+                            <div>
+                              <span className="font-semibold">₹{parseFloat(order.total_amount || '0').toLocaleString()}</span>
+                              {order.discount_code && parseFloat(order.discount_amount || '0') > 0 && (
+                                <div className="text-[10px] text-green-400 mt-0.5">
+                                  {order.discount_code} (-₹{parseFloat(order.discount_amount || '0').toLocaleString()})
+                                </div>
+                              )}
+                            </div>
+                          </td>
                           <td className="py-3 px-4">
                             <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(order.status)}`}>
                               {order.status}
