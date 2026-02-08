@@ -229,6 +229,18 @@ export default function RetailerBillDetailPage() {
 
     setRazorpayLoading(true);
     try {
+      // Ensure Razorpay SDK is loaded
+      if (!(window as any).Razorpay) {
+        // Dynamically load the script if not yet available
+        await new Promise<void>((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+          script.onload = () => resolve();
+          script.onerror = () => reject(new Error('Failed to load Razorpay SDK'));
+          document.head.appendChild(script);
+        });
+      }
+
       // Create Razorpay order via backend
       const orderRes = await fetch(`${API_URL}/invoices/${billId}/create-razorpay-order/`, {
         method: 'POST',
@@ -239,21 +251,20 @@ export default function RetailerBillDetailPage() {
         body: JSON.stringify({ amount: amount }),
       });
 
-      let orderData: any;
-      if (orderRes.ok) {
-        orderData = await orderRes.json();
-      } else {
-        // If backend endpoint doesn't exist yet, create a client-side order
-        orderData = null;
+      if (!orderRes.ok) {
+        const errData = await orderRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to create payment order');
       }
 
+      const orderData = await orderRes.json();
+
       const options: any = {
-        key: orderData?.razorpay_key || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+        key: orderData.razorpay_key || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: Math.round(amount * 100), // paise
         currency: bill.currency_code || 'INR',
         name: 'OdooxSNS',
         description: `Payment for Invoice ${bill.invoice_number}`,
-        order_id: orderData?.razorpay_order_id || undefined,
+        order_id: orderData.razorpay_order_id,
         handler: async function (response: any) {
           // Payment successful — record it
           try {
@@ -489,7 +500,7 @@ export default function RetailerBillDetailPage() {
 
   return (
     <div className="min-h-screen bg-neutral-950">
-      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
+      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="afterInteractive" />
       <RetailerNavbar />
       <div className="container mx-auto p-6">
         {/* Header */}
